@@ -1,6 +1,6 @@
-export default function App() {
-import React, { useState } from 'react';
-import { Search, AlertCircle, CheckCircle, TrendingUp, Info, X } from 'lucide-react';
+import React, { useState } from "react";
+import { Search, AlertCircle, CheckCircle, TrendingUp, Info } from "lucide-react";
+
 // Google NLP Content Categories
 const GOOGLE_CATEGORIES = [
   "/Arts & Entertainment",
@@ -248,18 +248,18 @@ const GOOGLE_CATEGORIES = [
   "/Health/Public Health",
   "/Health/Reproductive Health",
   "/Health/Substance Abuse",
-  "/Health/Health Education & Medical Training"
+  "/Health/Health Education & Medical Training",
 ].sort();
 
 export default function ContentAnalyzer() {
-  const [url, setUrl] = useState('');
-  const [intendedPrimary, setIntendedPrimary] = useState('');
-  const [intendedSecondary, setIntendedSecondary] = useState('');
-  const [googleApiKey, setGoogleApiKey] = useState('');
-  const [anthropicApiKey, setAnthropicApiKey] = useState('');
+  const [url, setUrl] = useState("");
+  const [intendedPrimary, setIntendedPrimary] = useState("");
+  const [intendedSecondary, setIntendedSecondary] = useState("");
+  const [googleApiKey, setGoogleApiKey] = useState("");
+  const [anthropicApiKey, setAnthropicApiKey] = useState("");
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [showApiHelp, setShowApiHelp] = useState(false);
 
   const fetchUrlContent = async (targetUrl) => {
@@ -713,5 +713,4 @@ Analyze this content for LLM grounding. Provide JSON (no markdown):
       </div>
     </div>
   );
-}
 }
