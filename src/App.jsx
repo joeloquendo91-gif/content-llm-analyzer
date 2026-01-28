@@ -272,64 +272,15 @@ const fetchWithTimeout = (resource, options = {}, timeoutMs = 20000) =>
   ]);
 
 const fetchUrlContent = async (targetUrl) => {
-  // Use your timeout helper (you defined it but weren’t using it)
-  const res = await fetchWithTimeout(
-    `/api/fetch?url=${encodeURIComponent(targetUrl)}`,
-    {},
-    20000
-  );
+  const response = await fetch(`/api/extract?url=${encodeURIComponent(targetUrl)}`);
+  const data = await response.json();
 
-  // If API route returns HTML (404/500), don’t try response.json()
-  const contentType = res.headers.get("content-type") || "";
-  const raw = await res.text();
-
-  if (!res.ok) {
-    // Show the first ~200 chars so you can actually see what came back
-    throw new Error(`Fetch API failed (${res.status}). Response: ${raw.slice(0, 200)}`);
+  if (!response.ok) {
+    throw new Error(data?.error || "Failed to fetch URL");
   }
 
-  if (!contentType.includes("application/json")) {
-    throw new Error(
-      `Expected JSON from /api/fetch but got "${contentType}". Response: ${raw.slice(0, 200)}`
-    );
-  }
-
-  let data;
-  try {
-    data = JSON.parse(raw);
-  } catch (e) {
-    throw new Error(`Could not parse JSON from /api/fetch. Response: ${raw.slice(0, 200)}`);
-  }
-
-  const html = data?.html || "";
-  if (!html || html.length < 100) {
-    throw new Error("API returned empty/short HTML. Try Paste Content mode.");
-  }
-
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, "text/html");
-
-  // Prefer main/article content (Wikipedia-friendly)
-  const main =
-    doc.querySelector("main") ||
-    doc.querySelector("article") ||
-    doc.querySelector("#mw-content-text") ||
-    doc.body;
-
-  main?.querySelectorAll?.(
-    "script, style, nav, header, footer, aside, iframe, form"
-  ).forEach((el) => el.remove());
-
-  const text = main?.textContent || "";
-  const cleaned = text.replace(/\s+/g, " ").trim();
-
-  if (cleaned.length < 200) {
-    throw new Error(
-      "Fetched page but extracted very little text. Use Paste Content mode for this URL."
-    );
-  }
-
-  return cleaned.slice(0, 50000);
+  // data: { title, excerpt, headings[], text }
+  return data;
 };
 
   const analyzeWithGoogleNLP = async (content) => {
@@ -380,108 +331,99 @@ const fetchUrlContent = async (targetUrl) => {
     };
   };
 
-  const analyzeWithClaude = async (content, nlpResults) => {
-    // Extract structure from plain text (no markdown needed)
-    const extractStructure = (text) => {
-      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-      let h1 = '';
-      const h2s = [];
-      let intro = '';
-      
-      // Find H1 - usually the first substantial line
-      if (lines.length > 0) {
-        h1 = lines[0];
-      }
-      
-      // Find H2s - lines that are:
-      // - 10-100 characters
-      // - Followed by longer content
-      // - Title case or ALL CAPS
-      // - Don't end with punctuation
-      for (let i = 1; i < Math.min(lines.length, 50); i++) {
-        const line = lines[i];
-        const nextLine = lines[i + 1] || '';
-        
-        // Check if looks like heading
-        const looksLikeHeading = 
-          line.length >= 10 && 
-          line.length <= 100 &&
-          !line.endsWith('.') && 
-          !line.endsWith(',') &&
-          !line.endsWith(';') &&
-          (nextLine.length > line.length * 1.5 || nextLine.length === 0) &&
-          (line === line.toUpperCase() || // ALL CAPS
-           (line[0] === line[0].toUpperCase() && (line.match(/[A-Z]/g) || []).length >= 2)); // Title Case
-        
-        if (looksLikeHeading) {
-          h2s.push(line);
-        }
-      }
-      
-      // Get intro (first 200 words after H1)
-      const words = text.split(/\s+/).slice(20, 220); // Skip first 20 words (likely title/navigation)
-      intro = words.join(' ');
-      
-      return { h1, h2s, intro };
-    };
-    
-    const structure = extractStructure(content);
-    
-    const categoryContext = nlpResults.primaryCategory 
-      ? `Detected: ${nlpResults.primaryCategory.name} (${(nlpResults.primaryCategory.confidence * 100).toFixed(1)}%)`
-      : 'No categories detected';
-    
-    const intentContext = intendedPrimary 
-      ? `\nIntended Primary: ${intendedPrimary}${intendedSecondary ? `, Secondary: ${intendedSecondary}` : ''}`
-      : '';
-    
-    const structureContext = `\n\nSTRUCTURE DETECTED:
-H1: "${structure.h1}"
-H2s (${structure.h2s.length} found): ${structure.h2s.slice(0, 5).map((h, i) => `\n  ${i+1}. ${h}`).join('')}
-Intro: "${structure.intro.slice(0, 200)}..."`;
+  const analyzeWithClaude = async (content, nlpResults, extraction) => {
+  // ---- STRUCTURE FROM EXTRACTION (SOURCE OF TRUTH) ----
 
-    const prompt = `${categoryContext}${intentContext}${structureContext}
+  const title = extraction?.title || "(No title detected)";
+  const excerpt = extraction?.excerpt || "(No excerpt detected)";
+  const headings = extraction?.headings || [];
 
-Content: ${content.slice(0, 30000)}
+  const outline = headings.length
+    ? headings
+        .slice(0, 40) // safety cap
+        .map(
+          (h, i) => `${i + 1}. ${h.level.toUpperCase()}: ${h.text}`
+        )
+        .join("\n")
+    : "No headings extracted.";
 
-Analyze this content for LLM grounding. The structure (H1, H2s) has been detected from plain text formatting - users don't need markdown.
+  // ---- CATEGORY CONTEXT ----
 
-Provide JSON (no markdown):
+  const categoryContext = nlpResults.primaryCategory
+    ? `Detected Category: ${nlpResults.primaryCategory.name} (${(
+        nlpResults.primaryCategory.confidence * 100
+      ).toFixed(1)}%)`
+    : "No Google NLP category detected";
+
+  const intentContext = extraction?.intendedPrimary
+    ? `\nIntended Primary Category: ${extraction.intendedPrimary}`
+    : "";
+
+  // ---- PROMPT ----
+
+  const prompt = `
+${categoryContext}${intentContext}
+
+SOURCE-OF-TRUTH PAGE STRUCTURE (from DOM extraction):
+Title: ${title}
+Excerpt: ${excerpt}
+
+Outline:
+${outline}
+
+Content (truncated):
+${content.slice(0, 25000)}
+
+TASK:
+Analyze how well this content is grounded for the detected PRIMARY category.
+
+Use the extracted title and headings as the authoritative structure.
+Do NOT guess headings.
+
+Return JSON ONLY (no markdown):
+
 {
-  "alignmentExplanation": "Does detected match intended? Reference the H1 and H2 structure provided.",
+  "alignmentExplanation": "Does the extracted structure align with the detected category?",
   "groundingScore": 0-100,
-  "groundingExplanation": "What makes this grounded for PRIMARY category. Reference specific H1/H2s.",
-  "categoryMatchStatus": "PRIMARY MATCH|WRONG PRIORITY|PRIMARY MISMATCH|No intent specified",
+  "groundingExplanation": "Why this score, referencing specific H1/H2s",
+  "categoryMatchStatus": "PRIMARY MATCH | WRONG PRIORITY | PRIMARY MISMATCH | No intent specified",
   "keyImprovements": {
-    "h1": "Current H1: '${structure.h1}'. Issue and specific recommendation.",
-    "structure": "Current H2 order: ${structure.h2s.slice(0, 3).join(', ')}... Issue with ordering and specific fix.",
-    "intro": "Intro analysis: currently says '${structure.intro.slice(0, 100)}...' Issue and changes needed.",
-    "topRecommendations": ["3-5 specific, actionable changes with evidence from H1/H2s"]
+    "h1": "Issue with current H1/title and a specific recommendation",
+    "structure": "Issues with H2/H3 ordering and how to fix them",
+    "intro": "Intro/excerpt issues and recommended changes",
+    "topRecommendations": [
+      "3–5 concrete, structural improvements tied to headings"
+    ]
   }
-}`;
+}
+`;
 
-    const response = await fetch("/api/claude", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    prompt,
-    model: "claude-sonnet-4-20250514",
-    max_tokens: 3000
-  }),
-});
+  // ---- API CALL ----
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error?.message || 'Claude API error');
-    }
+  const response = await fetch("/api/claude", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt }),
+  });
 
-    const data = await response.json();
-    const text = data.content.find(c => c.type === 'text')?.text || '';
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    
-    if (!jsonMatch) throw new Error('Could not parse analysis');
-    return JSON.parse(jsonMatch[0]);
-  };
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err?.error || "Claude analysis failed");
+  }
+
+  const data = await response.json();
+
+  // ---- PARSE JSON SAFELY ----
+
+  const text = data.content?.find((c) => c.type === "text")?.text || "";
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+
+  if (!jsonMatch) {
+    throw new Error("Claude response did not return valid JSON");
+  }
+
+  return JSON.parse(jsonMatch[0]);
+};
 
   const handleAnalyze = async () => {
     if ((!url && !manualContent) || !googleApiKey) {
@@ -494,23 +436,26 @@ Provide JSON (no markdown):
     setResults(null);
 
     try {
-      let content;
-      
-      if (useManualInput && manualContent) {
-        content = manualContent;
-      } else if (url) {
-        content = await fetchUrlContent(url);
-      } else {
-        throw new Error('Please provide either a URL or paste content manually');
-      }
-      
-      const nlpResults = await analyzeWithGoogleNLP(content);
-      const claudeResults = await analyzeWithClaude(content, nlpResults);
+      let extraction = null;
+let contentText = "";
 
-      setResults({
-        nlp: nlpResults,
-        claude: claudeResults
-      });
+if (useManualInput && manualContent) {
+  contentText = manualContent;
+} else if (url) {
+  extraction = await fetchUrlContent(url);
+  contentText = extraction.text;
+} else {
+  throw new Error("Please provide either a URL or paste content manually");
+}
+
+const nlpResults = await analyzeWithGoogleNLP(contentText);
+const claudeResults = await analyzeWithClaude(contentText, nlpResults, extraction);
+
+setResults({
+  extraction,  // <-- new
+  nlp: nlpResults,
+  claude: claudeResults,
+});
     } catch (err) {
       setError(err.message);
     } finally {
@@ -863,6 +808,37 @@ Provide JSON (no markdown):
               </div>
             )}
           </div>
+          {results?.extraction && (
+  <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+    <h2 className="text-xl font-bold text-gray-800 mb-3">Extracted Outline</h2>
+
+    <div className="text-sm text-gray-600 mb-3">
+      <div><span className="font-semibold">Title:</span> {results.extraction.title || "—"}</div>
+      <div className="mt-1"><span className="font-semibold">Excerpt:</span> {results.extraction.excerpt || "—"}</div>
+    </div>
+
+    <div className="border rounded-lg p-4 bg-gray-50 max-h-72 overflow-auto">
+      {results.extraction.headings?.length ? (
+        <ul className="space-y-2">
+          {results.extraction.headings.map((h, idx) => (
+            <li key={idx} className="text-sm">
+              <span className="inline-block w-10 font-mono text-gray-500">
+                {h.level.toUpperCase()}
+              </span>
+              <span className="text-gray-800">{h.text}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="text-sm text-gray-600">No headings extracted.</div>
+      )}
+    </div>
+
+    <div className="mt-3 text-xs text-gray-500">
+      This outline is extracted from the page HTML (Readability + DOM headings), not guessed from plain text.
+    </div>
+  </div>
+)}
         )}
 
         {/* Footer */}
