@@ -1,107 +1,85 @@
-// api/extract.js (CommonJS - safest for Vercel)
-const { JSDOM } = require("jsdom");
-const { Readability } = require("@mozilla/readability");
+// api/extract.js
+import { JSDOM } from "jsdom";
+import { Readability } from "@mozilla/readability";
 
-module.exports = async function handler(req, res) {
+export const config = {
+  runtime: "nodejs",
+};
+
+function cleanText(s = "") {
+  return s.replace(/\s+/g, " ").trim();
+}
+
+function collectHeadings(doc) {
+  const nodes = Array.from(doc.querySelectorAll("h1,h2,h3,h4,h5,h6"));
+  return nodes
+    .map((n) => ({
+      level: n.tagName.toLowerCase(),
+      text: cleanText(n.textContent || ""),
+    }))
+    .filter((h) => h.text.length > 0);
+}
+
+export default async function handler(req, res) {
   try {
-    const url = req.query && req.query.url;
+    const url = req.query?.url;
 
-    if (!url || typeof url !== "string") {
+    if (!url) {
       return res.status(400).json({ error: "Missing ?url=" });
     }
 
-    let parsed;
-    try {
-      parsed = new URL(url);
-    } catch {
-      return res.status(400).json({ error: "Invalid URL" });
+    // Basic safety: only allow http/https
+    if (!/^https?:\/\//i.test(url)) {
+      return res.status(400).json({ error: "URL must start with http:// or https://" });
     }
 
-    const resp = await fetch(parsed.toString(), {
+    const r = await fetch(url, {
+      redirect: "follow",
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (compatible; ContentLLMAnalyzer/1.0; +https://vercel.app)",
-        Accept:
+        // Some sites block generic requests; this helps
+        "user-agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome Safari",
+        "accept":
           "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       },
-      redirect: "follow",
     });
 
-    const contentType = resp.headers.get("content-type") || "";
-    const status = resp.status;
-    const html = await resp.text();
-
-    if (!resp.ok) {
-      return res.status(status).json({
-        error: `Upstream fetch failed: HTTP ${status}`,
-        contentType,
-        sample: html.slice(0, 300),
+    if (!r.ok) {
+      return res.status(r.status).json({
+        error: `Upstream fetch failed: HTTP ${r.status}`,
       });
     }
 
-    if (!contentType.includes("text/html")) {
-      return res.status(415).json({
-        error: `Unsupported content-type: ${contentType}`,
-        contentType,
-      });
+    const html = await r.text();
+    if (!html || html.length < 100) {
+      return res.status(500).json({ error: "Fetched HTML was empty/too short" });
     }
 
-    const cappedHtml = html.slice(0, 1_500_000); // 1.5MB cap
-    const dom = new JSDOM(cappedHtml, { url: parsed.toString() });
+    const dom = new JSDOM(html, { url });
     const doc = dom.window.document;
 
-    doc
-      .querySelectorAll(
-        "script, style, nav, header, footer, aside, iframe, form, noscript"
-      )
-      .forEach((el) => el.remove());
+    // Remove obvious junk before readability
+    doc.querySelectorAll("script,style,noscript,iframe,form,nav,footer,header,aside").forEach((el) => el.remove());
 
-    const headings = [...doc.querySelectorAll("h1,h2,h3,h4,h5,h6")]
-      .map((node) => {
-        const level = node.tagName.toLowerCase();
-        const text = (node.textContent || "").replace(/\s+/g, " ").trim();
-        return { level, text };
-      })
-      .filter((h) => h.text && h.text.length >= 3)
-      .slice(0, 80);
+    const headings = collectHeadings(doc);
 
+    // Readability for main content
     const reader = new Readability(doc);
     const article = reader.parse();
 
-    const title =
-      (article?.title || doc.querySelector("title")?.textContent || "").trim();
-
-    const excerpt = (article?.excerpt || "")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 300);
-
-    const text = (article?.textContent || doc.body?.textContent || "")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 50_000);
-
-    if (!text || text.length < 100) {
-      return res.status(422).json({
-        error:
-          "Fetched HTML but extracted very little readable text. Use Paste Content mode for this URL.",
-        title,
-        excerpt,
-        headings,
-      });
-    }
+    const title = cleanText(article?.title || doc.title || "");
+    const excerpt = cleanText(article?.excerpt || "");
+    const text = cleanText(article?.textContent || doc.body?.textContent || "");
 
     return res.status(200).json({
-      url: parsed.toString(),
       title,
       excerpt,
       headings,
-      text,
+      text: text.slice(0, 50000),
     });
-  } catch (err) {
+  } catch (e) {
     return res.status(500).json({
-      error: "Serverless function crashed",
-      message: err?.message || String(err),
+      error: e?.message || "Server error",
     });
   }
-};
+}
