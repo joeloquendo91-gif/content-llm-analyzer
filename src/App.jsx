@@ -678,168 +678,227 @@ setResults({
           )}
         </div>
 
-        {/* Results */}
-        {results && (
-          <div className="space-y-6">
-            {/* Category Detection */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h2 className="text-xl font-bold text-gray-800 mb-4">Category Detection</h2>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div className="p-4 bg-indigo-50 rounded-lg">
-                  <div className="text-sm text-gray-600 mb-1">Detected Primary</div>
-                  <div className="font-semibold">{results.nlp.primaryCategory?.name || 'N/A'}</div>
-                  <div className="text-sm text-indigo-600">
-                    {results.nlp.primaryCategory ? `${(results.nlp.primaryCategory.confidence * 100).toFixed(1)}%` : ''}
-                  </div>
-                </div>
+{/* Results */}
+{results && (
+  <div className="space-y-6">
 
-                <div className="p-4 bg-purple-50 rounded-lg">
-                  <div className="text-sm text-gray-600 mb-1">Detected Secondary</div>
-                  <div className="font-semibold">{results.nlp.secondaryCategory?.name || 'None'}</div>
-                  <div className="text-sm text-purple-600">
-                    {results.nlp.secondaryCategory ? `${(results.nlp.secondaryCategory.confidence * 100).toFixed(1)}%` : ''}
-                  </div>
-                </div>
+    {/* Extracted Outline */}
+    {results?.extraction && (
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <h2 className="text-xl font-bold text-gray-800 mb-3">
+          Extracted Outline
+        </h2>
 
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <div className="text-sm text-gray-600 mb-1">Clarity Gap</div>
-                  <div className="font-semibold">{(results.nlp.clarityGap * 100).toFixed(1)}%</div>
-                  <div className={`text-sm font-medium ${
-                    results.nlp.alignmentStatus === 'Aligned' ? 'text-green-600' :
-                    results.nlp.alignmentStatus === 'Mixed (Acceptable)' ? 'text-yellow-600' :
-                    'text-red-600'
-                  }`}>
-                    {results.nlp.alignmentStatus}
-                  </div>
-                </div>
-              </div>
-
-              {results.claude.categoryMatchStatus && (
-                <div className={`p-4 rounded-lg border-2 ${
-                  results.claude.categoryMatchStatus.includes('MATCH') && !results.claude.categoryMatchStatus.includes('MISMATCH')
-                    ? 'bg-green-50 border-green-300' :
-                  results.claude.categoryMatchStatus.includes('WRONG PRIORITY')
-                    ? 'bg-yellow-50 border-yellow-300' :
-                  results.claude.categoryMatchStatus.includes('MISMATCH')
-                    ? 'bg-red-50 border-red-300' :
-                  'bg-gray-50 border-gray-300'
-                }`}>
-                  <div className="font-semibold text-gray-800 mb-1">Category Match Status</div>
-                  <div className="text-sm">{results.claude.categoryMatchStatus}</div>
-                </div>
-              )}
-            </div>
-
-            {/* Grounding Score */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h2 className="text-xl font-bold text-gray-800 mb-4">Grounding Analysis</h2>
-              
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-semibold">Grounding Score</span>
-                  <span className="text-2xl font-bold text-indigo-600">{results.claude.groundingScore}/100</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
-                  <div 
-                    className={`h-3 rounded-full ${
-                      results.claude.groundingScore >= 75 ? 'bg-green-500' :
-                      results.claude.groundingScore >= 50 ? 'bg-yellow-500' :
-                      'bg-red-500'
-                    }`}
-                    style={{ width: `${results.claude.groundingScore}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-700">{results.claude.groundingExplanation}</p>
-              </div>
-
-              {results.claude.alignmentExplanation && (
-                <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                  <div className="font-semibold text-gray-800 mb-2">Alignment Details</div>
-                  <p className="text-sm text-gray-700">{results.claude.alignmentExplanation}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Key Improvements */}
-            {results.claude.keyImprovements && (
-              <div className="bg-white rounded-xl shadow-lg p-6">
-                <h2 className="text-xl font-bold text-gray-800 mb-4">Key Improvements</h2>
-                
-                <div className="space-y-4">
-                  {results.claude.keyImprovements.h1 && (
-                    <div className="p-4 bg-indigo-50 rounded-lg">
-                      <div className="font-semibold text-gray-800 mb-2">H1 Analysis</div>
-                      <p className="text-sm text-gray-700 whitespace-pre-line">{results.claude.keyImprovements.h1}</p>
-                    </div>
-                  )}
-
-                  {results.claude.keyImprovements.structure && (
-                    <div className="p-4 bg-purple-50 rounded-lg">
-                      <div className="font-semibold text-gray-800 mb-2">Heading Structure</div>
-                      <p className="text-sm text-gray-700 whitespace-pre-line">{results.claude.keyImprovements.structure}</p>
-                    </div>
-                  )}
-
-                  {results.claude.keyImprovements.intro && (
-                    <div className="p-4 bg-blue-50 rounded-lg">
-                      <div className="font-semibold text-gray-800 mb-2">Introduction</div>
-                      <p className="text-sm text-gray-700 whitespace-pre-line">{results.claude.keyImprovements.intro}</p>
-                    </div>
-                  )}
-
-                  {results.claude.keyImprovements.topRecommendations && (
-                    <div className="p-4 bg-green-50 rounded-lg">
-                      <div className="font-semibold text-gray-800 mb-3">Top Recommendations</div>
-                      <ul className="space-y-2">
-                        {results.claude.keyImprovements.topRecommendations.map((rec, idx) => (
-                          <li key={idx} className="flex items-start gap-2">
-                            <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                            <span className="text-sm text-gray-700">{rec}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+        <div className="text-sm text-gray-600 mb-3 space-y-1">
+          <div>
+            <span className="font-semibold">Title:</span>{" "}
+            {results.extraction.title || "—"}
           </div>
-          {results?.extraction && (
-  <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
-    <h2 className="text-xl font-bold text-gray-800 mb-3">Extracted Outline</h2>
+          <div>
+            <span className="font-semibold">Excerpt:</span>{" "}
+            {results.extraction.excerpt || "—"}
+          </div>
+        </div>
 
-    <div className="text-sm text-gray-600 mb-3">
-      <div><span className="font-semibold">Title:</span> {results.extraction.title || "—"}</div>
-      <div className="mt-1"><span className="font-semibold">Excerpt:</span> {results.extraction.excerpt || "—"}</div>
-    </div>
+        <div className="border rounded-lg p-4 bg-gray-50 max-h-72 overflow-auto">
+          {results.extraction.headings?.length ? (
+            <ul className="space-y-2">
+              {results.extraction.headings.map((h, idx) => (
+                <li key={idx} className="text-sm flex gap-2">
+                  <span className="w-10 font-mono text-gray-500">
+                    {String(h.level || "").toUpperCase()}
+                  </span>
+                  <span className="text-gray-800">{h.text}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="text-sm text-gray-600">
+              No headings extracted.
+            </div>
+          )}
+        </div>
 
-    <div className="border rounded-lg p-4 bg-gray-50 max-h-72 overflow-auto">
-      {results.extraction.headings?.length ? (
-        <ul className="space-y-2">
-          {results.extraction.headings.map((h, idx) => (
-            <li key={idx} className="text-sm">
-              <span className="inline-block w-10 font-mono text-gray-500">
-                {h.level.toUpperCase()}
-              </span>
-              <span className="text-gray-800">{h.text}</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <div className="text-sm text-gray-600">No headings extracted.</div>
+        <div className="mt-3 text-xs text-gray-500">
+          Extracted directly from HTML using Readability + DOM heading parsing.
+        </div>
+      </div>
+    )}
+
+    {/* Category Detection */}
+    <div className="bg-white rounded-xl shadow-lg p-6">
+      <h2 className="text-xl font-bold text-gray-800 mb-4">
+        Category Detection
+      </h2>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div className="p-4 bg-indigo-50 rounded-lg">
+          <div className="text-sm text-gray-600 mb-1">Detected Primary</div>
+          <div className="font-semibold">
+            {results.nlp.primaryCategory?.name || "N/A"}
+          </div>
+          <div className="text-sm text-indigo-600">
+            {results.nlp.primaryCategory
+              ? `${(results.nlp.primaryCategory.confidence * 100).toFixed(1)}%`
+              : ""}
+          </div>
+        </div>
+
+        <div className="p-4 bg-purple-50 rounded-lg">
+          <div className="text-sm text-gray-600 mb-1">Detected Secondary</div>
+          <div className="font-semibold">
+            {results.nlp.secondaryCategory?.name || "None"}
+          </div>
+          <div className="text-sm text-purple-600">
+            {results.nlp.secondaryCategory
+              ? `${(results.nlp.secondaryCategory.confidence * 100).toFixed(1)}%`
+              : ""}
+          </div>
+        </div>
+
+        <div className="p-4 bg-blue-50 rounded-lg">
+          <div className="text-sm text-gray-600 mb-1">Clarity Gap</div>
+          <div className="font-semibold">
+            {(results.nlp.clarityGap * 100).toFixed(1)}%
+          </div>
+          <div
+            className={`text-sm font-medium ${
+              results.nlp.alignmentStatus === "Aligned"
+                ? "text-green-600"
+                : results.nlp.alignmentStatus === "Mixed (Acceptable)"
+                ? "text-yellow-600"
+                : "text-red-600"
+            }`}
+          >
+            {results.nlp.alignmentStatus}
+          </div>
+        </div>
+      </div>
+
+      {results.claude?.categoryMatchStatus && (
+        <div
+          className={`p-4 rounded-lg border-2 ${
+            results.claude.categoryMatchStatus.includes("MATCH") &&
+            !results.claude.categoryMatchStatus.includes("MISMATCH")
+              ? "bg-green-50 border-green-300"
+              : results.claude.categoryMatchStatus.includes("WRONG PRIORITY")
+              ? "bg-yellow-50 border-yellow-300"
+              : results.claude.categoryMatchStatus.includes("MISMATCH")
+              ? "bg-red-50 border-red-300"
+              : "bg-gray-50 border-gray-300"
+          }`}
+        >
+          <div className="font-semibold text-gray-800 mb-1">
+            Category Match Status
+          </div>
+          <div className="text-sm">
+            {results.claude.categoryMatchStatus}
+          </div>
+        </div>
       )}
     </div>
 
-    <div className="mt-3 text-xs text-gray-500">
-      This outline is extracted from the page HTML (Readability + DOM headings), not guessed from plain text.
+    {/* Grounding Analysis */}
+    <div className="bg-white rounded-xl shadow-lg p-6">
+      <h2 className="text-xl font-bold text-gray-800 mb-4">
+        Grounding Analysis
+      </h2>
+
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <span className="font-semibold">Grounding Score</span>
+          <span className="text-2xl font-bold text-indigo-600">
+            {results.claude.groundingScore}/100
+          </span>
+        </div>
+
+        <div className="w-full bg-gray-200 rounded-full h-3">
+          <div
+            className={`h-3 rounded-full ${
+              results.claude.groundingScore >= 75
+                ? "bg-green-500"
+                : results.claude.groundingScore >= 50
+                ? "bg-yellow-500"
+                : "bg-red-500"
+            }`}
+            style={{ width: `${results.claude.groundingScore}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-700">
+        {results.claude.groundingExplanation}
+      </div>
+
+      {results.claude.alignmentExplanation && (
+        <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+          <div className="font-semibold text-gray-800 mb-2">
+            Alignment Details
+          </div>
+          <p className="text-sm text-gray-700">
+            {results.claude.alignmentExplanation}
+          </p>
+        </div>
+      )}
     </div>
+
+    {/* Key Improvements */}
+    {results.claude.keyImprovements && (
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <h2 className="text-xl font-bold text-gray-800 mb-4">
+          Key Improvements
+        </h2>
+
+        <div className="space-y-4">
+          {results.claude.keyImprovements.h1 && (
+            <div className="p-4 bg-indigo-50 rounded-lg">
+              <div className="font-semibold text-gray-800 mb-2">H1</div>
+              <p className="text-sm text-gray-700 whitespace-pre-line">
+                {results.claude.keyImprovements.h1}
+              </p>
+            </div>
+          )}
+
+          {results.claude.keyImprovements.structure && (
+            <div className="p-4 bg-purple-50 rounded-lg">
+              <div className="font-semibold text-gray-800 mb-2">Structure</div>
+              <p className="text-sm text-gray-700 whitespace-pre-line">
+                {results.claude.keyImprovements.structure}
+              </p>
+            </div>
+          )}
+
+          {results.claude.keyImprovements.intro && (
+            <div className="p-4 bg-blue-50 rounded-lg">
+              <div className="font-semibold text-gray-800 mb-2">Intro</div>
+              <p className="text-sm text-gray-700 whitespace-pre-line">
+                {results.claude.keyImprovements.intro}
+              </p>
+            </div>
+          )}
+
+          {results.claude.keyImprovements.topRecommendations && (
+            <div className="p-4 bg-green-50 rounded-lg">
+              <div className="font-semibold text-gray-800 mb-3">
+                Top Recommendations
+              </div>
+              <ul className="space-y-2">
+                {results.claude.keyImprovements.topRecommendations.map(
+                  (rec, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
+                      <span className="text-sm text-gray-700">{rec}</span>
+                    </li>
+                  )
+                )}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
+    )}
   </div>
 )}
-        )}
 
         {/* Footer */}
         <div className="mt-8 text-center text-sm text-gray-600">
