@@ -258,7 +258,6 @@ export default function ContentAnalyzer() {
   const [intendedPrimary, setIntendedPrimary] = useState('');
   const [intendedSecondary, setIntendedSecondary] = useState('');
   const [googleApiKey, setGoogleApiKey] = useState('');
-  const [anthropicApiKey, setAnthropicApiKey] = useState('');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState(null);
   const [error, setError] = useState('');
@@ -485,8 +484,8 @@ Provide JSON (no markdown):
   };
 
   const handleAnalyze = async () => {
-    if ((!url && !manualContent) || !googleApiKey || !anthropicApiKey) {
-      setError('Please fill in content (URL or manual), and both API keys');
+    if ((!url && !manualContent) || !googleApiKey) {
+      setError('Please fill in content (URL or manual)');
       return;
     }
 
@@ -676,19 +675,6 @@ Provide JSON (no markdown):
                   value={googleApiKey}
                   onChange={(e) => setGoogleApiKey(e.target.value)}
                   placeholder="AIza..."
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Anthropic API Key *
-                </label>
-                <input
-                  type="password"
-                  value={anthropicApiKey}
-                  onChange={(e) => setAnthropicApiKey(e.target.value)}
-                  placeholder="sk-ant-..."
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 />
               </div>
@@ -882,7 +868,6 @@ Provide JSON (no markdown):
         {/* Footer */}
         <div className="mt-8 text-center text-sm text-gray-600">
           <p>Built with Google Cloud Natural Language API & Anthropic Claude</p>
-          <p className="mt-2">Your API keys are never stored or sent to our servers</p>
         </div>
       </div>
     </div>
