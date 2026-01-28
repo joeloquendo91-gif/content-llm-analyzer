@@ -273,58 +273,30 @@ const fetchWithTimeout = (resource, options = {}, timeoutMs = 20000) =>
   ]);
 
 const fetchUrlContent = async (targetUrl) => {
-  const attempts = [
-    // 1) Direct fetch (works for many sites like Wikipedia)
-    { label: "Direct", url: targetUrl },
+  const response = await fetch(`/api/fetch?url=${encodeURIComponent(targetUrl)}`);
+  const data = await response.json();
 
-    // 2) Proxies (fallbacks)
-    { label: "Jina", url: `https://r.jina.ai/${targetUrl}` },
-    { label: "AllOrigins", url: `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}` },
-    { label: "CORSProxy", url: `https://corsproxy.io/?${encodeURIComponent(targetUrl)}` },
-    { label: "CodeTabs", url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}` },
-  ];
-
-  let lastError = "";
-
-  for (const a of attempts) {
-    try {
-      const response = await fetchWithTimeout(a.url, {}, 20000);
-      if (!response.ok) {
-        lastError = `${a.label}: HTTP ${response.status}`;
-        continue;
-      }
-
-      const html = await response.text();
-      if (!html || html.length < 100) {
-        lastError = `${a.label}: content too short`;
-        continue;
-      }
-
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, "text/html");
-
-      // Remove junk
-      doc.querySelectorAll("script, style, nav, header, footer, aside, iframe, form")
-        .forEach((el) => el.remove());
-
-      const text = doc.body?.textContent || "";
-      const cleaned = text.replace(/\s+/g, " ").trim();
-
-      if (cleaned.length < 100) {
-        lastError = `${a.label}: insufficient cleaned text`;
-        continue;
-      }
-
-      return cleaned.slice(0, 50000);
-    } catch (err) {
-      lastError = `${a.label}: ${err?.message || "Failed to fetch"}`;
-    }
+  if (!response.ok) {
+    throw new Error(data?.error || "Failed to fetch URL");
   }
 
-  throw new Error(
-    `Could not fetch this page. This is usually caused by network/ad-block/CORS restrictions.\n` +
-    `Try "Paste Content" mode.\n\nLast error: ${lastError}`
-  );
+  const html = data.html || "";
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+
+  // Remove junk
+  doc
+    .querySelectorAll("script, style, nav, header, footer, aside, iframe, form")
+    .forEach((el) => el.remove());
+
+  const text = doc.body?.textContent || "";
+  const cleaned = text.replace(/\s+/g, " ").trim();
+
+  if (cleaned.length < 100) {
+    throw new Error("Fetched page but extracted very little text. Try Paste Content mode.");
+  }
+
+  return cleaned.slice(0, 50000);
 };
 
   const analyzeWithGoogleNLP = async (content) => {
