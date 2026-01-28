@@ -254,7 +254,7 @@ const GOOGLE_CATEGORIES = [
 export default function ContentAnalyzer() {
   const [url, setUrl] = useState('');
   const [manualContent, setManualContent] = useState('');
-  const [useManualInput, setUseManualInput] = useState(false);
+  const [useManualInput, setUseManualInput] = useState(true); // Changed to true - paste mode is default
   const [intendedPrimary, setIntendedPrimary] = useState('');
   const [intendedSecondary, setIntendedSecondary] = useState('');
   const [googleApiKey, setGoogleApiKey] = useState('');
@@ -265,6 +265,29 @@ export default function ContentAnalyzer() {
   const [showApiHelp, setShowApiHelp] = useState(false);
 
   const fetchUrlContent = async (targetUrl) => {
+    // Try direct fetch first (works for sites with CORS enabled)
+    try {
+      const directResponse = await fetch(targetUrl, {
+        signal: AbortSignal.timeout(10000),
+        mode: 'cors'
+      });
+      
+      if (directResponse.ok) {
+        const html = await directResponse.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const junk = doc.querySelectorAll('script, style, nav, header, footer, aside, iframe, form');
+        junk.forEach(el => el.remove());
+        const text = doc.body.textContent || '';
+        const cleaned = text.replace(/\s+/g, ' ').trim();
+        if (cleaned.length >= 100) {
+          return cleaned.slice(0, 50000);
+        }
+      }
+    } catch (err) {
+      // Direct fetch failed, try proxies
+    }
+
     const proxies = [
       `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
       `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
@@ -276,7 +299,7 @@ export default function ContentAnalyzer() {
     for (let i = 0; i < proxies.length; i++) {
       try {
         const response = await fetch(proxies[i], {
-          signal: AbortSignal.timeout(15000) // 15 second timeout
+          signal: AbortSignal.timeout(15000)
         });
         
         if (!response.ok) {
@@ -313,7 +336,7 @@ export default function ContentAnalyzer() {
       }
     }
     
-    throw new Error(`All proxies failed. Last error: ${lastError}. Try pasting content manually or use a different URL.`);
+    throw new Error(`Unable to fetch URL automatically. Please use the "Paste Content" option instead. Copy your webpage content and paste it manually. (Technical: ${lastError})`);
   };
 
   const analyzeWithGoogleNLP = async (content) => {
@@ -365,6 +388,52 @@ export default function ContentAnalyzer() {
   };
 
   const analyzeWithClaude = async (content, nlpResults) => {
+    // Extract structure from plain text (no markdown needed)
+    const extractStructure = (text) => {
+      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      let h1 = '';
+      const h2s = [];
+      let intro = '';
+      
+      // Find H1 - usually the first substantial line
+      if (lines.length > 0) {
+        h1 = lines[0];
+      }
+      
+      // Find H2s - lines that are:
+      // - 10-100 characters
+      // - Followed by longer content
+      // - Title case or ALL CAPS
+      // - Don't end with punctuation
+      for (let i = 1; i < Math.min(lines.length, 50); i++) {
+        const line = lines[i];
+        const nextLine = lines[i + 1] || '';
+        
+        // Check if looks like heading
+        const looksLikeHeading = 
+          line.length >= 10 && 
+          line.length <= 100 &&
+          !line.endsWith('.') && 
+          !line.endsWith(',') &&
+          !line.endsWith(';') &&
+          (nextLine.length > line.length * 1.5 || nextLine.length === 0) &&
+          (line === line.toUpperCase() || // ALL CAPS
+           (line[0] === line[0].toUpperCase() && (line.match(/[A-Z]/g) || []).length >= 2)); // Title Case
+        
+        if (looksLikeHeading) {
+          h2s.push(line);
+        }
+      }
+      
+      // Get intro (first 200 words after H1)
+      const words = text.split(/\s+/).slice(20, 220); // Skip first 20 words (likely title/navigation)
+      intro = words.join(' ');
+      
+      return { h1, h2s, intro };
+    };
+    
+    const structure = extractStructure(content);
+    
     const categoryContext = nlpResults.primaryCategory 
       ? `Detected: ${nlpResults.primaryCategory.name} (${(nlpResults.primaryCategory.confidence * 100).toFixed(1)}%)`
       : 'No categories detected';
@@ -372,22 +441,29 @@ export default function ContentAnalyzer() {
     const intentContext = intendedPrimary 
       ? `\nIntended Primary: ${intendedPrimary}${intendedSecondary ? `, Secondary: ${intendedSecondary}` : ''}`
       : '';
+    
+    const structureContext = `\n\nSTRUCTURE DETECTED:
+H1: "${structure.h1}"
+H2s (${structure.h2s.length} found): ${structure.h2s.slice(0, 5).map((h, i) => `\n  ${i+1}. ${h}`).join('')}
+Intro: "${structure.intro.slice(0, 200)}..."`;
 
-    const prompt = `${categoryContext}${intentContext}
+    const prompt = `${categoryContext}${intentContext}${structureContext}
 
 Content: ${content.slice(0, 30000)}
 
-Analyze this content for LLM grounding. Provide JSON (no markdown):
+Analyze this content for LLM grounding. The structure (H1, H2s) has been detected from plain text formatting - users don't need markdown.
+
+Provide JSON (no markdown):
 {
-  "alignmentExplanation": "Does detected match intended? Why/why not?",
+  "alignmentExplanation": "Does detected match intended? Reference the H1 and H2 structure provided.",
   "groundingScore": 0-100,
-  "groundingExplanation": "What makes this grounded for PRIMARY category",
+  "groundingExplanation": "What makes this grounded for PRIMARY category. Reference specific H1/H2s.",
   "categoryMatchStatus": "PRIMARY MATCH|WRONG PRIORITY|PRIMARY MISMATCH|No intent specified",
   "keyImprovements": {
-    "h1": "Current H1 and recommendation",
-    "structure": "H2 ordering issues and fixes",
-    "intro": "Intro analysis and changes needed",
-    "topRecommendations": ["Top 3-5 actionable changes"]
+    "h1": "Current H1: '${structure.h1}'. Issue and specific recommendation.",
+    "structure": "Current H2 order: ${structure.h2s.slice(0, 3).join(', ')}... Issue with ordering and specific fix.",
+    "intro": "Intro analysis: currently says '${structure.intro.slice(0, 100)}...' Issue and changes needed.",
+    "topRecommendations": ["3-5 specific, actionable changes with evidence from H1/H2s"]
   }
 }`;
 
@@ -648,9 +724,35 @@ Analyze this content for LLM grounding. Provide JSON (no markdown):
           </div>
 
           {error && (
-            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-start gap-2">
-              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-              <span>{error}</span>
+            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-600" />
+                <div className="flex-1">
+                  <p className="text-red-700 font-semibold mb-2">Error: {error}</p>
+                  {error.includes('fetch') && !useManualInput && (
+                    <div className="bg-white p-3 rounded border border-red-300 mt-2">
+                      <p className="text-sm text-gray-700 mb-2">
+                        <strong>Quick fix:</strong> Switch to "Paste Content" mode above and manually paste your content:
+                      </p>
+                      <ol className="text-sm text-gray-600 list-decimal ml-4 space-y-1">
+                        <li>Click the "Paste Content" radio button above</li>
+                        <li>Go to your webpage and copy all the text (Ctrl+A, Ctrl+C)</li>
+                        <li>Paste it in the text box that appears</li>
+                        <li>Click "Analyze Content"</li>
+                      </ol>
+                      <button
+                        onClick={() => {
+                          setUseManualInput(true);
+                          setError('');
+                        }}
+                        className="mt-3 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700"
+                      >
+                        Switch to Paste Content
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>
