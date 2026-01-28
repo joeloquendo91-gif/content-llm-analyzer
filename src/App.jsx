@@ -461,19 +461,15 @@ Provide JSON (no markdown):
   }
 }`;
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': anthropicApiKey,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 3000,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
+    const response = await fetch("/api/claude", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    prompt,
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 3000
+  }),
+});
 
     if (!response.ok) {
       const error = await response.json();
