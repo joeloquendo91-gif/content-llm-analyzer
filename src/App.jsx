@@ -264,80 +264,68 @@ export default function ContentAnalyzer() {
   const [error, setError] = useState('');
   const [showApiHelp, setShowApiHelp] = useState(false);
 
-  const fetchUrlContent = async (targetUrl) => {
-    // Try direct fetch first (works for sites with CORS enabled)
+const fetchWithTimeout = (resource, options = {}, timeoutMs = 20000) =>
+  Promise.race([
+    fetch(resource, options),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Request timeout")), timeoutMs)
+    ),
+  ]);
+
+const fetchUrlContent = async (targetUrl) => {
+  const attempts = [
+    // 1) Direct fetch (works for many sites like Wikipedia)
+    { label: "Direct", url: targetUrl },
+
+    // 2) Proxies (fallbacks)
+    { label: "Jina", url: `https://r.jina.ai/${targetUrl}` },
+    { label: "AllOrigins", url: `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}` },
+    { label: "CORSProxy", url: `https://corsproxy.io/?${encodeURIComponent(targetUrl)}` },
+    { label: "CodeTabs", url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}` },
+  ];
+
+  let lastError = "";
+
+  for (const a of attempts) {
     try {
-      const directResponse = await fetch(targetUrl, {
-        signal: AbortSignal.timeout(10000),
-        mode: 'cors'
-      });
-      
-      if (directResponse.ok) {
-        const html = await directResponse.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        const junk = doc.querySelectorAll('script, style, nav, header, footer, aside, iframe, form');
-        junk.forEach(el => el.remove());
-        const text = doc.body.textContent || '';
-        const cleaned = text.replace(/\s+/g, ' ').trim();
-        if (cleaned.length >= 100) {
-          return cleaned.slice(0, 50000);
-        }
-      }
-    } catch (err) {
-      // Direct fetch failed, try proxies
-    }
-
-    const proxies = [
-      `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
-      `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
-      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`
-    ];
-
-    let lastError = '';
-    
-    for (let i = 0; i < proxies.length; i++) {
-      try {
-        const response = await fetch(proxies[i], {
-          signal: AbortSignal.timeout(15000)
-        });
-        
-        if (!response.ok) {
-          lastError = `Proxy ${i + 1}: HTTP ${response.status}`;
-          continue;
-        }
-        
-        const html = await response.text();
-        
-        if (!html || html.length < 100) {
-          lastError = `Proxy ${i + 1}: Content too short`;
-          continue;
-        }
-        
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        
-        // Remove junk
-        const junk = doc.querySelectorAll('script, style, nav, header, footer, aside, iframe, form');
-        junk.forEach(el => el.remove());
-        
-        const text = doc.body.textContent || '';
-        const cleaned = text.replace(/\s+/g, ' ').trim();
-        
-        if (cleaned.length < 100) {
-          lastError = `Proxy ${i + 1}: Insufficient content`;
-          continue;
-        }
-        
-        return cleaned.slice(0, 50000);
-      } catch (err) {
-        lastError = `Proxy ${i + 1}: ${err.message}`;
+      const response = await fetchWithTimeout(a.url, {}, 20000);
+      if (!response.ok) {
+        lastError = `${a.label}: HTTP ${response.status}`;
         continue;
       }
+
+      const html = await response.text();
+      if (!html || html.length < 100) {
+        lastError = `${a.label}: content too short`;
+        continue;
+      }
+
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, "text/html");
+
+      // Remove junk
+      doc.querySelectorAll("script, style, nav, header, footer, aside, iframe, form")
+        .forEach((el) => el.remove());
+
+      const text = doc.body?.textContent || "";
+      const cleaned = text.replace(/\s+/g, " ").trim();
+
+      if (cleaned.length < 100) {
+        lastError = `${a.label}: insufficient cleaned text`;
+        continue;
+      }
+
+      return cleaned.slice(0, 50000);
+    } catch (err) {
+      lastError = `${a.label}: ${err?.message || "Failed to fetch"}`;
     }
-    
-    throw new Error(`Unable to fetch URL automatically. Please use the "Paste Content" option instead. Copy your webpage content and paste it manually. (Technical: ${lastError})`);
-  };
+  }
+
+  throw new Error(
+    `Could not fetch this page. This is usually caused by network/ad-block/CORS restrictions.\n` +
+    `Try "Paste Content" mode.\n\nLast error: ${lastError}`
+  );
+};
 
   const analyzeWithGoogleNLP = async (content) => {
     const response = await fetch(
