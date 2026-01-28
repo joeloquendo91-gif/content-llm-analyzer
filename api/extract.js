@@ -1,15 +1,15 @@
-import { JSDOM } from "jsdom";
-import { Readability } from "@mozilla/readability";
+// api/extract.js (CommonJS - safest for Vercel)
+const { JSDOM } = require("jsdom");
+const { Readability } = require("@mozilla/readability");
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   try {
-    const url = req.query?.url;
+    const url = req.query && req.query.url;
 
     if (!url || typeof url !== "string") {
       return res.status(400).json({ error: "Missing ?url=" });
     }
 
-    // Basic URL validation
     let parsed;
     try {
       parsed = new URL(url);
@@ -17,13 +17,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Invalid URL" });
     }
 
-    // Fetch HTML
     const resp = await fetch(parsed.toString(), {
       headers: {
-        // Helps with some sites returning odd responses
         "User-Agent":
           "Mozilla/5.0 (compatible; ContentLLMAnalyzer/1.0; +https://vercel.app)",
-        "Accept":
+        Accept:
           "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       },
       redirect: "follow",
@@ -31,7 +29,6 @@ export default async function handler(req, res) {
 
     const contentType = resp.headers.get("content-type") || "";
     const status = resp.status;
-
     const html = await resp.text();
 
     if (!resp.ok) {
@@ -49,40 +46,35 @@ export default async function handler(req, res) {
       });
     }
 
-    // Hard cap to avoid huge pages crashing function
-    const cappedHtml = html.slice(0, 1_500_000); // 1.5MB
-
-    // Parse HTML in JSDOM
+    const cappedHtml = html.slice(0, 1_500_000); // 1.5MB cap
     const dom = new JSDOM(cappedHtml, { url: parsed.toString() });
     const doc = dom.window.document;
 
-    // Remove junk before Readability
     doc
       .querySelectorAll(
         "script, style, nav, header, footer, aside, iframe, form, noscript"
       )
       .forEach((el) => el.remove());
 
-    // Extract headings from DOM (more reliable than guessing from plain text)
-    const headingNodes = [...doc.querySelectorAll("h1,h2,h3,h4,h5,h6")];
-    const headings = headingNodes
+    const headings = [...doc.querySelectorAll("h1,h2,h3,h4,h5,h6")]
       .map((node) => {
         const level = node.tagName.toLowerCase();
         const text = (node.textContent || "").replace(/\s+/g, " ").trim();
         return { level, text };
       })
       .filter((h) => h.text && h.text.length >= 3)
-      .slice(0, 80); // keep it reasonable
+      .slice(0, 80);
 
-    // Readability extraction
     const reader = new Readability(doc);
     const article = reader.parse();
 
     const title =
       (article?.title || doc.querySelector("title")?.textContent || "").trim();
 
-    const excerpt =
-      (article?.excerpt || "").replace(/\s+/g, " ").trim().slice(0, 300);
+    const excerpt = (article?.excerpt || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 300);
 
     const text = (article?.textContent || doc.body?.textContent || "")
       .replace(/\s+/g, " ")
@@ -107,11 +99,9 @@ export default async function handler(req, res) {
       text,
     });
   } catch (err) {
-    // Always return JSON, never crash
     return res.status(500).json({
       error: "Serverless function crashed",
       message: err?.message || String(err),
-      stack: process.env.NODE_ENV === "development" ? err?.stack : undefined,
     });
   }
-}
+};
