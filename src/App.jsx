@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Search, AlertCircle, CheckCircle, TrendingUp, Info } from "lucide-react";
+import React, { useState } from 'react';
+import { Search, AlertCircle, CheckCircle, TrendingUp, Info, X } from 'lucide-react';
 
 // Google NLP Content Categories
 const GOOGLE_CATEGORIES = [
@@ -248,38 +248,72 @@ const GOOGLE_CATEGORIES = [
   "/Health/Public Health",
   "/Health/Reproductive Health",
   "/Health/Substance Abuse",
-  "/Health/Health Education & Medical Training",
+  "/Health/Health Education & Medical Training"
 ].sort();
 
 export default function ContentAnalyzer() {
-  const [url, setUrl] = useState("");
-  const [intendedPrimary, setIntendedPrimary] = useState("");
-  const [intendedSecondary, setIntendedSecondary] = useState("");
-  const [googleApiKey, setGoogleApiKey] = useState("");
-  const [anthropicApiKey, setAnthropicApiKey] = useState("");
+  const [url, setUrl] = useState('');
+  const [manualContent, setManualContent] = useState('');
+  const [useManualInput, setUseManualInput] = useState(false);
+  const [intendedPrimary, setIntendedPrimary] = useState('');
+  const [intendedSecondary, setIntendedSecondary] = useState('');
+  const [googleApiKey, setGoogleApiKey] = useState('');
+  const [anthropicApiKey, setAnthropicApiKey] = useState('');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [showApiHelp, setShowApiHelp] = useState(false);
 
   const fetchUrlContent = async (targetUrl) => {
-    try {
-      const response = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`);
-      if (!response.ok) throw new Error('Failed to fetch URL');
-      
-      const html = await response.text();
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, 'text/html');
-      
-      // Remove junk
-      const junk = doc.querySelectorAll('script, style, nav, header, footer, aside, iframe');
-      junk.forEach(el => el.remove());
-      
-      const text = doc.body.textContent || '';
-      return text.replace(/\s+/g, ' ').trim().slice(0, 50000);
-    } catch (err) {
-      throw new Error('Could not fetch URL content');
+    const proxies = [
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+      `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
+      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`
+    ];
+
+    let lastError = '';
+    
+    for (let i = 0; i < proxies.length; i++) {
+      try {
+        const response = await fetch(proxies[i], {
+          signal: AbortSignal.timeout(15000) // 15 second timeout
+        });
+        
+        if (!response.ok) {
+          lastError = `Proxy ${i + 1}: HTTP ${response.status}`;
+          continue;
+        }
+        
+        const html = await response.text();
+        
+        if (!html || html.length < 100) {
+          lastError = `Proxy ${i + 1}: Content too short`;
+          continue;
+        }
+        
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        
+        // Remove junk
+        const junk = doc.querySelectorAll('script, style, nav, header, footer, aside, iframe, form');
+        junk.forEach(el => el.remove());
+        
+        const text = doc.body.textContent || '';
+        const cleaned = text.replace(/\s+/g, ' ').trim();
+        
+        if (cleaned.length < 100) {
+          lastError = `Proxy ${i + 1}: Insufficient content`;
+          continue;
+        }
+        
+        return cleaned.slice(0, 50000);
+      } catch (err) {
+        lastError = `Proxy ${i + 1}: ${err.message}`;
+        continue;
+      }
     }
+    
+    throw new Error(`All proxies failed. Last error: ${lastError}. Try pasting content manually or use a different URL.`);
   };
 
   const analyzeWithGoogleNLP = async (content) => {
@@ -385,8 +419,8 @@ Analyze this content for LLM grounding. Provide JSON (no markdown):
   };
 
   const handleAnalyze = async () => {
-    if (!url || !googleApiKey || !anthropicApiKey) {
-      setError('Please fill in URL and both API keys');
+    if ((!url && !manualContent) || !googleApiKey || !anthropicApiKey) {
+      setError('Please fill in content (URL or manual), and both API keys');
       return;
     }
 
@@ -395,7 +429,16 @@ Analyze this content for LLM grounding. Provide JSON (no markdown):
     setResults(null);
 
     try {
-      const content = await fetchUrlContent(url);
+      let content;
+      
+      if (useManualInput && manualContent) {
+        content = manualContent;
+      } else if (url) {
+        content = await fetchUrlContent(url);
+      } else {
+        throw new Error('Please provide either a URL or paste content manually');
+      }
+      
       const nlpResults = await analyzeWithGoogleNLP(content);
       const claudeResults = await analyzeWithClaude(content, nlpResults);
 
@@ -471,18 +514,57 @@ Analyze this content for LLM grounding. Provide JSON (no markdown):
         {/* Input Form */}
         <div className="bg-white rounded-xl shadow-lg p-6 md:p-8 mb-6">
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                URL to Analyze *
+            <div className="flex items-center gap-4 pb-4 border-b">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  checked={!useManualInput}
+                  onChange={() => setUseManualInput(false)}
+                  className="w-4 h-4 text-indigo-600"
+                />
+                <span className="font-medium text-gray-700">Fetch from URL</span>
               </label>
-              <input
-                type="url"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://example.com/article"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              />
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  checked={useManualInput}
+                  onChange={() => setUseManualInput(true)}
+                  className="w-4 h-4 text-indigo-600"
+                />
+                <span className="font-medium text-gray-700">Paste Content</span>
+              </label>
             </div>
+
+            {!useManualInput ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  URL to Analyze *
+                </label>
+                <input
+                  type="url"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="https://example.com/article"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Paste Your Content *
+                </label>
+                <textarea
+                  value={manualContent}
+                  onChange={(e) => setManualContent(e.target.value)}
+                  placeholder="Paste your article content here..."
+                  rows={8}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-mono text-sm"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Copy and paste the text content from your webpage (no HTML needed)
+                </p>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
