@@ -273,27 +273,61 @@ const fetchWithTimeout = (resource, options = {}, timeoutMs = 20000) =>
   ]);
 
 const fetchUrlContent = async (targetUrl) => {
-  const response = await fetch(`/api/fetch?url=${encodeURIComponent(targetUrl)}`);
-  const data = await response.json();
+  // Use your timeout helper (you defined it but weren’t using it)
+  const res = await fetchWithTimeout(
+    `/api/fetch?url=${encodeURIComponent(targetUrl)}`,
+    {},
+    20000
+  );
 
-  if (!response.ok) {
-    throw new Error(data?.error || "Failed to fetch URL");
+  // If API route returns HTML (404/500), don’t try response.json()
+  const contentType = res.headers.get("content-type") || "";
+  const raw = await res.text();
+
+  if (!res.ok) {
+    // Show the first ~200 chars so you can actually see what came back
+    throw new Error(`Fetch API failed (${res.status}). Response: ${raw.slice(0, 200)}`);
   }
 
-  const html = data.html || "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      `Expected JSON from /api/fetch but got "${contentType}". Response: ${raw.slice(0, 200)}`
+    );
+  }
+
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch (e) {
+    throw new Error(`Could not parse JSON from /api/fetch. Response: ${raw.slice(0, 200)}`);
+  }
+
+  const html = data?.html || "";
+  if (!html || html.length < 100) {
+    throw new Error("API returned empty/short HTML. Try Paste Content mode.");
+  }
+
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, "text/html");
 
-  // Remove junk
-  doc
-    .querySelectorAll("script, style, nav, header, footer, aside, iframe, form")
-    .forEach((el) => el.remove());
+  // Prefer main/article content (Wikipedia-friendly)
+  const main =
+    doc.querySelector("main") ||
+    doc.querySelector("article") ||
+    doc.querySelector("#mw-content-text") ||
+    doc.body;
 
-  const text = doc.body?.textContent || "";
+  main?.querySelectorAll?.(
+    "script, style, nav, header, footer, aside, iframe, form"
+  ).forEach((el) => el.remove());
+
+  const text = main?.textContent || "";
   const cleaned = text.replace(/\s+/g, " ").trim();
 
-  if (cleaned.length < 100) {
-    throw new Error("Fetched page but extracted very little text. Try Paste Content mode.");
+  if (cleaned.length < 200) {
+    throw new Error(
+      "Fetched page but extracted very little text. Use Paste Content mode for this URL."
+    );
   }
 
   return cleaned.slice(0, 50000);
