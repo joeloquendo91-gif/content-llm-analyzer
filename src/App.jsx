@@ -273,15 +273,29 @@ const fetchWithTimeout = (resource, options = {}, timeoutMs = 20000) =>
 
 const fetchUrlContent = async (targetUrl) => {
   const response = await fetch(`/api/extract?url=${encodeURIComponent(targetUrl)}`);
-  const data = await response.json();
+
+  // Always read as text first (server might return HTML/text on errors)
+  const raw = await response.text();
+
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch (e) {
+    // This is the exact scenario you’re hitting
+    throw new Error(
+      `API did not return JSON (status ${response.status}). ` +
+      `Response starts with: ${raw.slice(0, 120)}`
+    );
+  }
 
   if (!response.ok) {
-    throw new Error(data?.error || "Failed to fetch URL");
+    throw new Error(data?.error || `Failed to fetch URL (status ${response.status})`);
   }
 
   // data: { title, excerpt, headings[], text }
   return data;
 };
+
 
   const analyzeWithGoogleNLP = async (content) => {
     const response = await fetch(

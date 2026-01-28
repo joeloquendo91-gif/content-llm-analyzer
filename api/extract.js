@@ -1,133 +1,117 @@
 import { JSDOM } from "jsdom";
 import { Readability } from "@mozilla/readability";
 
-const UA =
-  "Mozilla/5.0 (compatible; ContentLLMAnalyzer/1.0; +https://content-llm-analyzer.vercel.app)";
-
-// (4) Junk kill-switch selectors (tweak anytime)
-const JUNK_SELECTORS = [
-  "script",
-  "style",
-  "nav",
-  "header",
-  "footer",
-  "aside",
-  "iframe",
-  "form",
-  "noscript",
-
-  // common “not main content” blocks:
-  ".toc",
-  ".table-of-contents",
-  ".related",
-  ".related-articles",
-  ".recommended",
-  ".newsletter",
-  ".subscribe",
-  ".social",
-  ".share",
-  ".sharing",
-  ".promo",
-  ".advert",
-  ".ads",
-  ".ad",
-  '[class*="share"]',
-  '[class*="social"]',
-  '[aria-label*="share"]',
-  '[id*="share"]',
-];
-
-function cleanText(s = "") {
-  return s.replace(/\s+/g, " ").trim();
-}
-
-function extractHeadings(doc) {
-  // Pull headings IN ORDER from extracted article DOM
-  const nodes = [...doc.querySelectorAll("h1,h2,h3")];
-
-  const headings = nodes
-    .map((h) => ({
-      level: h.tagName.toLowerCase(), // "h1" | "h2" | "h3"
-      text: cleanText(h.textContent || ""),
-    }))
-    .filter((h) => h.text.length > 0);
-
-  // De-dupe consecutive duplicates (common with sticky headers)
-  const deduped = [];
-  for (const h of headings) {
-    const prev = deduped[deduped.length - 1];
-    if (!prev || prev.text !== h.text || prev.level !== h.level) deduped.push(h);
-  }
-
-  return deduped;
-}
-
 export default async function handler(req, res) {
   try {
-    const targetUrl = req.query.url;
-    if (!targetUrl) {
-      return res.status(400).json({ error: "Missing url parameter" });
+    const url = req.query?.url;
+
+    if (!url || typeof url !== "string") {
+      return res.status(400).json({ error: "Missing ?url=" });
     }
 
-    // Fetch raw HTML
-    const r = await fetch(targetUrl, {
-      headers: { "User-Agent": UA },
+    // Basic URL validation
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return res.status(400).json({ error: "Invalid URL" });
+    }
+
+    // Fetch HTML
+    const resp = await fetch(parsed.toString(), {
+      headers: {
+        // Helps with some sites returning odd responses
+        "User-Agent":
+          "Mozilla/5.0 (compatible; ContentLLMAnalyzer/1.0; +https://vercel.app)",
+        "Accept":
+          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      },
       redirect: "follow",
     });
 
-    if (!r.ok) {
-      return res.status(502).json({ error: `Fetch failed: HTTP ${r.status}` });
-    }
+    const contentType = resp.headers.get("content-type") || "";
+    const status = resp.status;
 
-    const html = await r.text();
-    if (!html || html.length < 200) {
-      return res.status(422).json({ error: "Fetched HTML is too short" });
-    }
+    const html = await resp.text();
 
-    // Load into JSDOM using the correct URL so Readability resolves relative links properly
-    const dom = new JSDOM(html, { url: targetUrl });
-    const rawDoc = dom.window.document;
-
-    // Pre-clean obvious junk BEFORE readability
-    rawDoc.querySelectorAll(JUNK_SELECTORS.join(",")).forEach((el) => el.remove());
-
-    // (1) Readability isolate main article content
-    const reader = new Readability(rawDoc);
-    const article = reader.parse();
-
-    if (!article?.content) {
-      return res.status(422).json({
-        error:
-          "Could not extract main content with Readability. Try Paste mode or a different URL.",
+    if (!resp.ok) {
+      return res.status(status).json({
+        error: `Upstream fetch failed: HTTP ${status}`,
+        contentType,
+        sample: html.slice(0, 300),
       });
     }
 
-    // Parse extracted article content
-    const articleDom = new JSDOM(article.content);
-    const doc = articleDom.window.document;
+    if (!contentType.includes("text/html")) {
+      return res.status(415).json({
+        error: `Unsupported content-type: ${contentType}`,
+        contentType,
+      });
+    }
 
-    // (4) Kill-switch cleanup INSIDE article too
-    doc.querySelectorAll(JUNK_SELECTORS.join(",")).forEach((el) => el.remove());
+    // Hard cap to avoid huge pages crashing function
+    const cappedHtml = html.slice(0, 1_500_000); // 1.5MB
 
-    const headings = extractHeadings(doc);
+    // Parse HTML in JSDOM
+    const dom = new JSDOM(cappedHtml, { url: parsed.toString() });
+    const doc = dom.window.document;
 
-    const text = cleanText(doc.body?.textContent || "");
-    if (text.length < 200) {
+    // Remove junk before Readability
+    doc
+      .querySelectorAll(
+        "script, style, nav, header, footer, aside, iframe, form, noscript"
+      )
+      .forEach((el) => el.remove());
+
+    // Extract headings from DOM (more reliable than guessing from plain text)
+    const headingNodes = [...doc.querySelectorAll("h1,h2,h3,h4,h5,h6")];
+    const headings = headingNodes
+      .map((node) => {
+        const level = node.tagName.toLowerCase();
+        const text = (node.textContent || "").replace(/\s+/g, " ").trim();
+        return { level, text };
+      })
+      .filter((h) => h.text && h.text.length >= 3)
+      .slice(0, 80); // keep it reasonable
+
+    // Readability extraction
+    const reader = new Readability(doc);
+    const article = reader.parse();
+
+    const title =
+      (article?.title || doc.querySelector("title")?.textContent || "").trim();
+
+    const excerpt =
+      (article?.excerpt || "").replace(/\s+/g, " ").trim().slice(0, 300);
+
+    const text = (article?.textContent || doc.body?.textContent || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 50_000);
+
+    if (!text || text.length < 100) {
       return res.status(422).json({
         error:
-          "Extracted page but got very little text. Try Paste Content mode (or the page is JS-rendered).",
+          "Fetched HTML but extracted very little readable text. Use Paste Content mode for this URL.",
+        title,
+        excerpt,
+        headings,
       });
     }
 
     return res.status(200).json({
-      url: targetUrl,
-      title: cleanText(article.title || ""),
-      excerpt: cleanText(article.excerpt || ""),
-      byline: cleanText(article.byline || ""),
+      url: parsed.toString(),
+      title,
+      excerpt,
       headings,
-      text: text.slice(0, 50000),
+      text,
     });
-  } catch (e) {
-    return res.status(500).json({ error: e?.message || "Unknown server error" });
+  } catch (err) {
+    // Always return JSON, never crash
+    return res.status(500).json({
+      error: "Serverless function crashed",
+      message: err?.message || String(err),
+      stack: process.env.NODE_ENV === "development" ? err?.stack : undefined,
+    });
   }
 }
