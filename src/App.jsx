@@ -427,7 +427,7 @@ B) Intent Alignment Assessment
 - Classify overall alignment as Aligned, Partially aligned, or Mixed, and explain why.
 
 C) Top Mixed Signals
-- Identify the top 2–4 elements that weaken clarity.
+- Identify the top 3–6 elements that weaken clarity.
 - Examples include:
   - Broad or generic introductions
   - Headings signaling a different audience
@@ -435,7 +435,7 @@ C) Top Mixed Signals
   - Section order that delays context
 
 D) Suggested Non-Destructive Edits
-- Recommend specific, minimal edits such as:
+- Recommend specific, minimal edits 6 - 8 such as:
   - Intro framing tweaks
   - Heading renames or reordering
   - Short bridge or context-setting sentences
@@ -465,10 +465,13 @@ Return JSON ONLY (no markdown). Use exactly this schema:
   "topMixedSignals": [
     "C. Signal 1",
     "C. Signal 2",
-    "C. Signal 3 (optional)",
-    "C. Signal 4 (optional)"
+    "C. Signal 3",
+    "C. Signal 4",
+    "C. Signal 5 (optional)",
+    "C. Signal 6 (optional)"
   ],
   "suggestedEdits": [
+  // MUST contain 6 items
     {
       "location": "D. Where on page (e.g., Intro paragraph, H1, H2: '...')",
       "change": "D. The minimal edit",
@@ -483,12 +486,19 @@ Return JSON ONLY (no markdown). Use exactly this schema:
   "expectedOutcome": "E. 1–2 sentences"
 }
 
+RULES (MANDATORY):
+- suggestedEdits MUST contain exactly 6 items.
+- highestImpactEdit MUST be one of the 6 suggestedEdits.
+- highestImpactEdit should be the edit with the greatest clarity or intent-alignment impact.
+- Do NOT invent new sections or rewrite content.
+- Prefer micro-edits: heading rename, section reorder, intro framing, bridge sentence, audience clarification.
+
 CategoryMatchStatus rules:
 - If no target primary/secondary provided: "No intent specified"
 - If target primary matches detected primary: "PRIMARY MATCH"
 - If target primary differs but page still supports it partially: "WRONG PRIORITY"
 - If target primary strongly conflicts with detected primary: "PRIMARY MISMATCH"
-`;
+
 
   // ---- API CALL ----
 
@@ -986,13 +996,7 @@ setResults({
         </ul>
       </div>
     )}
-
-    {/* D */}
-    {Array.isArray(results.claude.suggestedEdits) && results.claude.suggestedEdits.length > 0 && (
-      <div className="p-4 bg-green-50 rounded-lg mb-3">
-        <div className="font-semibold text-gray-800 mb-2">
-          D. Suggested Non-Destructive Edits
-        </div>
+{/* Highest-impact edit (show even if suggestedEdits is empty) */}
 {results?.claude?.highestImpactEdit && (
   <div className="p-4 bg-amber-50 rounded-lg border border-amber-200 mb-4">
     <div className="font-semibold text-gray-800 mb-2">Highest-Impact Edit</div>
@@ -1000,19 +1004,26 @@ setResults({
     <div className="text-sm text-gray-700">
       <div className="mb-1">
         <span className="font-semibold">Location:</span>{" "}
-        {results.claude.highestImpactEdit.location}
+        {results.claude.highestImpactEdit.location || "—"}
       </div>
       <div className="mb-1">
         <span className="font-semibold">Change:</span>{" "}
-        {results.claude.highestImpactEdit.change}
+        {results.claude.highestImpactEdit.change || "—"}
       </div>
       <div>
         <span className="font-semibold">Reason:</span>{" "}
-        {results.claude.highestImpactEdit.reason}
+        {results.claude.highestImpactEdit.reason || "—"}
       </div>
     </div>
   </div>
 )}
+
+    {/* D */}
+    {Array.isArray(results.claude.suggestedEdits) && results.claude.suggestedEdits.length > 0 && (
+      <div className="p-4 bg-green-50 rounded-lg mb-3">
+        <div className="font-semibold text-gray-800 mb-2">
+          D. Suggested Non-Destructive Edits
+        </div>
         <div className="space-y-3">
           {results.claude.suggestedEdits.map((e, idx) => (
             <div key={idx} className="bg-white border border-green-200 rounded-lg p-3">
