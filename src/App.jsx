@@ -369,47 +369,67 @@ const fetchUrlContent = async (targetUrl) => {
       ).toFixed(1)}%)`
     : "No Google NLP category detected";
 
-  const intentContext = extraction?.intendedPrimary
-    ? `\nIntended Primary Category: ${extraction.intendedPrimary}`
+  const intentContext =
+  intendedPrimary || intendedSecondary
+    ? `\nTarget Primary Category: ${intendedPrimary || "(not specified)"}\nTarget Secondary Category: ${intendedSecondary || "(not specified)"}`
     : "";
 
   // ---- PROMPT ----
 
   const prompt = `
-${categoryContext}${intentContext}
+You are an expert in content intent interpretation and grounding for AI and search systems.
+Evaluate how the page is currently understood, identify mixed or competing signals, and recommend light, non-destructive edits.
 
-SOURCE-OF-TRUTH PAGE STRUCTURE (from DOM extraction):
-Title: ${title}
-Excerpt: ${excerpt}
+INPUTS
+URL: ${url}
+Google NLP:
+- Primary: ${nlpResults.primaryCategory ? `${nlpResults.primaryCategory.name} (${(nlpResults.primaryCategory.confidence * 100).toFixed(1)}%)` : "None"}
+- Secondary: ${nlpResults.secondaryCategory ? `${nlpResults.secondaryCategory.name} (${(nlpResults.secondaryCategory.confidence * 100).toFixed(1)}%)` : "None"}
+- Clarity gap: ${(nlpResults.clarityGap * 100).toFixed(1)}%
+${intentContext}
 
+EXTRACTED STRUCTURE (do not guess headings)
+Title: ${extraction?.title || ""}
+Excerpt: ${extraction?.excerpt || ""}
 Outline:
-${outline}
+${(extraction?.headings || []).slice(0, 30).map(h => `${h.level.toUpperCase()}: ${h.text}`).join("\n") || "(none)"}
 
-Content (truncated):
+CONTENT (truncated):
 ${content.slice(0, 25000)}
 
-TASK:
-Analyze how well this content is grounded for the detected PRIMARY category.
+TASKS
+1) Interpret Current Intent
+2) Assess Intent Alignment (use targets if provided; otherwise infer intended audience/purpose)
+3) Identify Key Mixed Signals (top 2–4)
+4) Recommend Non-Destructive Edits (NO rewrites, NO tone change, NO big section adds/removals)
+5) Explain the Why (why each edit improves interpretability for AI/search)
 
-Use the extracted title and headings as the authoritative structure.
-Do NOT guess headings.
-
-Return JSON ONLY (no markdown):
+RETURN JSON ONLY. NO MARKDOWN. Use exactly this schema:
 
 {
-  "alignmentExplanation": "Does the extracted structure align with the detected category?",
+  "alignmentExplanation": "A. Current Interpretation Summary (1–2 sentences)\\n\\nB. Intent Alignment Assessment (Aligned/Partially aligned/Mixed + brief reason)",
   "groundingScore": 0-100,
-  "groundingExplanation": "Why this score, referencing specific H1/H2s",
-  "categoryMatchStatus": "PRIMARY MATCH | WRONG PRIORITY | PRIMARY MISMATCH | No intent specified",
+  "groundingExplanation": "E. Expected Outcome (1–2 sentences on improved clarity + reduced intent competition)",
+  "categoryMatchStatus": "PRIMARY MATCH|WRONG PRIORITY|PRIMARY MISMATCH|No intent specified",
   "keyImprovements": {
-    "h1": "Issue with current H1/title and a specific recommendation",
-    "structure": "Issues with H2/H3 ordering and how to fix them",
-    "intro": "Intro/excerpt issues and recommended changes",
+    "h1": "D. Suggested Non-Destructive Edits — H1/Title: Location + change + reason",
+    "structure": "D. Suggested Non-Destructive Edits — Headings/Order: Location + change + reason (reference specific extracted headings)",
+    "intro": "D. Suggested Non-Destructive Edits — Intro: Location + change + reason",
     "topRecommendations": [
-      "3–5 concrete, structural improvements tied to headings"
+      "C. Top Mixed Signals — #1 ...",
+      "C. Top Mixed Signals — #2 ...",
+      "C. Top Mixed Signals — #3 ... (optional)",
+      "D. Edit — Location + change + reason",
+      "D. Edit — Location + change + reason"
     ]
   }
 }
+
+CategoryMatchStatus rules:
+- If no target primary/secondary provided: "No intent specified"
+- If target primary matches detected primary: "PRIMARY MATCH"
+- If target primary differs but page still supports it partially: "WRONG PRIORITY"
+- If target primary strongly conflicts with detected primary: "PRIMARY MISMATCH"
 `;
 
   // ---- API CALL ----
