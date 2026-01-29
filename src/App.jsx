@@ -374,58 +374,114 @@ const fetchUrlContent = async (targetUrl) => {
     ? `\nTarget Primary Category: ${intendedPrimary || "(not specified)"}\nTarget Secondary Category: ${intendedSecondary || "(not specified)"}`
     : "";
 
-  // ---- PROMPT ----
+// ---- PROMPT ----
 
-  const prompt = `
+const prompt = `
 You are an expert in content intent interpretation and grounding for AI and search systems.
-Evaluate how the page is currently understood, identify mixed or competing signals, and recommend light, non-destructive edits.
+Your job is to evaluate how a page is currently interpreted, identify mixed or competing signals,
+and recommend light, non-destructive edits that clarify intent and audience.
+
+IMPORTANT:
+- This is NOT an SEO or keyword analysis
+- Do NOT rewrite the page
+- Do NOT change tone or voice
+- Do NOT recommend adding or removing large sections
+- Assume edits will be made by humans; clarity over cleverness
 
 INPUTS
+
 URL: ${url}
-Google NLP:
+
+Google NLP Classification:
 - Primary: ${nlpResults.primaryCategory ? `${nlpResults.primaryCategory.name} (${(nlpResults.primaryCategory.confidence * 100).toFixed(1)}%)` : "None"}
 - Secondary: ${nlpResults.secondaryCategory ? `${nlpResults.secondaryCategory.name} (${(nlpResults.secondaryCategory.confidence * 100).toFixed(1)}%)` : "None"}
 - Clarity gap: ${(nlpResults.clarityGap * 100).toFixed(1)}%
 ${intentContext}
 
-EXTRACTED STRUCTURE (do not guess headings)
-Title: ${extraction?.title || ""}
-Excerpt: ${extraction?.excerpt || ""}
+EXTRACTED STRUCTURE (authoritative — do NOT guess headings)
+
+Title:
+${extraction?.title || "(none)"}
+
+Excerpt:
+${extraction?.excerpt || "(none)"}
+
 Outline:
-${(extraction?.headings || []).slice(0, 30).map(h => `${h.level.toUpperCase()}: ${h.text}`).join("\n") || "(none)"}
+${(extraction?.headings || [])
+  .slice(0, 30)
+  .map(h => `${h.level.toUpperCase()}: ${h.text}`)
+  .join("\n") || "(none)"}
 
 CONTENT (truncated):
 ${content.slice(0, 25000)}
 
 TASKS
-1) Interpret Current Intent
-2) Assess Intent Alignment (use targets if provided; otherwise infer intended audience/purpose)
-3) Identify Key Mixed Signals (top 2–4)
-4) Recommend Non-Destructive Edits (NO rewrites, NO tone change, NO big section adds/removals)
-5) Explain the Why (why each edit improves interpretability for AI/search)
+
+A) Current Interpretation Summary
+- In 1–2 sentences, explain how the page is most likely being interpreted today.
+- Describe the dominant intent and any secondary or competing intent.
+
+B) Intent Alignment Assessment
+- If target categories are provided, assess alignment against them.
+- If no targets are provided, infer the most likely intended audience and purpose.
+- Classify overall alignment as Aligned, Partially aligned, or Mixed, and explain why.
+
+C) Top Mixed Signals
+- Identify the top 2–4 elements that weaken clarity.
+- Examples include:
+  - Broad or generic introductions
+  - Headings signaling a different audience
+  - Role- or outcome-focused language instead of purpose or pathway
+  - Section order that delays context
+
+D) Suggested Non-Destructive Edits
+- Recommend specific, minimal edits such as:
+  - Intro framing tweaks
+  - Heading renames or reordering
+  - Short bridge or context-setting sentences
+- Do NOT rewrite content.
+- Do NOT change tone.
+- Do NOT add or remove major sections.
+
+D2) Highest-Impact Edit
+- From the edits above, identify the single edit that would most improve intent clarity.
+- This must be one of the edits already listed.
+- Explain briefly why this edit has higher impact than the others.
+
+E) Expected Outcome
+- In 1–2 sentences, explain how these changes would improve interpretability and reduce intent competition.
 
 Return JSON ONLY (no markdown). Use exactly this schema:
 
 {
   "categoryMatchStatus": "PRIMARY MATCH|WRONG PRIORITY|PRIMARY MISMATCH|No intent specified",
   "groundingScore": 0-100,
-  "groundingExplanation": "1–4 sentences. Why this score. Must reference Title + at least 2 headings from the extracted outline.",
+  "groundingExplanation": "1–4 sentences explaining the score. Must reference the Title and at least two headings from the extracted outline.",
   "currentInterpretationSummary": "A. 1–2 sentences",
   "intentAlignmentAssessment": {
     "status": "Aligned|Partially aligned|Mixed",
     "reason": "B. 1–3 sentences"
   },
-  "topMixedSignals": ["C. Signal 1", "C. Signal 2", "C. Signal 3 (optional)", "C. Signal 4 (optional)"],
+  "topMixedSignals": [
+    "C. Signal 1",
+    "C. Signal 2",
+    "C. Signal 3 (optional)",
+    "C. Signal 4 (optional)"
+  ],
   "suggestedEdits": [
     {
-      "location": "D. Where on page (e.g., H1, Intro paragraph, H2: '...', section order)",
-      "change": "D. The minimal edit (rename/reorder/bridge sentence tweak)",
+      "location": "D. Where on page (e.g., Intro paragraph, H1, H2: '...')",
+      "change": "D. The minimal edit",
       "reason": "D. Why this improves interpretability for AI/search"
     }
   ],
+  "highestImpactEdit": {
+    "location": "D2. Where on page",
+    "change": "D2. The single most impactful minimal edit",
+    "why": "D2. Why this edit matters more than the others"
+  },
   "expectedOutcome": "E. 1–2 sentences"
 }
-
 
 CategoryMatchStatus rules:
 - If no target primary/secondary provided: "No intent specified"
