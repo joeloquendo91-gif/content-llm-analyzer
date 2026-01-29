@@ -444,9 +444,11 @@ D) Suggested Non-Destructive Edits
 - Do NOT add or remove major sections.
 
 D2) Highest-Impact Edit
-- From the edits above, identify the single edit that would most improve intent clarity.
-- This must be one of the edits already listed.
-- Explain briefly why this edit has higher impact than the others.
+- Identify the SINGLE most impactful edit that would most improve intent clarity.
+- This should be DIFFERENT from the 6 edits listed above.
+- Focus on the one change that would have the largest impact on search/LLM interpretation.
+- This could be a title change, major heading restructure, or key positioning change.
+- Explain briefly why this edit has exceptional impact
 
 E) Expected Outcome
 - In 1–2 sentences, explain how these changes would improve interpretability and reduce intent competition.
@@ -469,6 +471,7 @@ Return JSON ONLY (no markdown). Use exactly this schema:
     "C. Signal 4 (optional)"
   ],
   "suggestedEdits": [
+  // MUST contain exactly 6 items
     {
       "location": "D. Where on page (e.g., Intro paragraph, H1, H2: '...')",
       "change": "D. The minimal edit",
@@ -476,9 +479,9 @@ Return JSON ONLY (no markdown). Use exactly this schema:
     }
   ],
   "highestImpactEdit": {
-    "location": "D2. Where on page",
-    "change": "D2. The single most impactful minimal edit",
-    "why": "D2. Why this edit matters more than the others"
+    "location": "D2. Where on page (MUST be different from the 6 edits above",
+    "change": "D2. The single highest-impact edit (e.g, major title rewrite, key H1 change)",
+    "why": "D2. Why this specific edit has exceptional impact compared to all others"
   },
   "expectedOutcome": "E. 1–2 sentences"
 }
@@ -488,6 +491,13 @@ CategoryMatchStatus rules:
 - If target primary matches detected primary: "PRIMARY MATCH"
 - If target primary differs but page still supports it partially: "WRONG PRIORITY"
 - If target primary strongly conflicts with detected primary: "PRIMARY MISMATCH"
+RULES (MANDATORY):
+- suggestedEdits MUST contain exactly 6 items.
+- highestImpactEdit MUST be DIFFERENT from all 6 suggestedEdits.
+- highestImpactEdit should target the highest-leverage change (often the H1 or main title).
+- highestImpactEdit should be a bigger, more impactful change than the other 6.
+- Do NOT invent new sections or rewrite content.
+- Prefer micro-edits for suggestedEdits; save major edits for highestImpactEdit.
 `;
 
   // ---- API CALL ----
