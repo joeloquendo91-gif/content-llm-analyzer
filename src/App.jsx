@@ -296,6 +296,14 @@ const fetchUrlContent = async (targetUrl) => {
   return data;
 };
 
+// Extract first 250 words from text
+const extractIntroduction = (text) => {
+  if (!text) return "";
+  const words = text.trim().split(/\s+/);
+  const first250 = words.slice(0, 250).join(' ');
+  return first250 + (words.length > 250 ? '...' : '');
+};
+
 
   const analyzeWithGoogleNLP = async (content) => {
     const response = await fetch(
@@ -349,7 +357,7 @@ const fetchUrlContent = async (targetUrl) => {
   // ---- STRUCTURE FROM EXTRACTION (SOURCE OF TRUTH) ----
 
   const title = extraction?.title || "(No title detected)";
-  const excerpt = extraction?.excerpt || "(No excerpt detected)";
+  const introduction = extraction?.introduction || "(No introduction detected)";
   const headings = extraction?.headings || [];
 
   const outline = headings.length
@@ -403,8 +411,8 @@ EXTRACTED STRUCTURE (authoritative — do NOT guess headings)
 Title:
 ${extraction?.title || "(none)"}
 
-Excerpt:
-${extraction?.excerpt || "(none)"}
+Introduction:
+${extraction?.introduction || "(none)"}
 
 Outline:
 ${(extraction?.headings || [])
@@ -444,11 +452,11 @@ D) Suggested Non-Destructive Edits
 - Do NOT add or remove major sections.
 
 D2) Highest-Impact Edit
-- Identify the SINGLE most impactful edit that would most improve intent clarity.
+- Identify the SINGLE most impactful edit that would improve intent clarity.
 - This should be DIFFERENT from the 6 edits listed above.
 - Focus on the one change that would have the largest impact on search/LLM interpretation.
 - This could be a title change, major heading restructure, or key positioning change.
-- Explain briefly why this edit has exceptional impact
+- Explain briefly why this edit has exceptional impact.
 
 E) Expected Outcome
 - In 1–2 sentences, explain how these changes would improve interpretability and reduce intent competition.
@@ -479,18 +487,13 @@ Return JSON ONLY (no markdown). Use exactly this schema:
     }
   ],
   "highestImpactEdit": {
-    "location": "D2. Where on page (MUST be different from the 6 edits above",
-    "change": "D2. The single highest-impact edit (e.g, major title rewrite, key H1 change)",
+    "location": "D2. Where on page (MUST be different from the 6 edits above)",
+    "change": "D2. The single highest-impact edit (e.g., major title rewrite, key H1 change)",
     "why": "D2. Why this specific edit has exceptional impact compared to all others"
   },
   "expectedOutcome": "E. 1–2 sentences"
 }
 
-CategoryMatchStatus rules:
-- If no target primary/secondary provided: "No intent specified"
-- If target primary matches detected primary: "PRIMARY MATCH"
-- If target primary differs but page still supports it partially: "WRONG PRIORITY"
-- If target primary strongly conflicts with detected primary: "PRIMARY MISMATCH"
 RULES (MANDATORY):
 - suggestedEdits MUST contain exactly 6 items.
 - highestImpactEdit MUST be DIFFERENT from all 6 suggestedEdits.
@@ -498,6 +501,12 @@ RULES (MANDATORY):
 - highestImpactEdit should be a bigger, more impactful change than the other 6.
 - Do NOT invent new sections or rewrite content.
 - Prefer micro-edits for suggestedEdits; save major edits for highestImpactEdit.
+
+CategoryMatchStatus rules:
+- If no target primary/secondary provided: "No intent specified"
+- If target primary matches detected primary: "PRIMARY MATCH"
+- If target primary differs but page still supports it partially: "WRONG PRIORITY"
+- If target primary strongly conflicts with detected primary: "PRIMARY MISMATCH"
 `;
 
   // ---- API CALL ----
@@ -543,9 +552,20 @@ let contentText = "";
 
 if (useManualInput && manualContent) {
   contentText = manualContent;
+  // Create extraction object for manual content
+  extraction = {
+    title: "Manual Content",
+    introduction: extractIntroduction(manualContent),
+    headings: [],
+    text: manualContent
+  };
 } else if (url) {
   extraction = await fetchUrlContent(url);
   contentText = extraction.text;
+  // Add introduction from first 250 words if not already present
+  if (!extraction.introduction && extraction.text) {
+    extraction.introduction = extractIntroduction(extraction.text);
+  }
 } else {
   throw new Error("Please provide either a URL or paste content manually");
 }
@@ -797,8 +817,8 @@ setResults({
             {results.extraction.title || "—"}
           </div>
           <div>
-            <span className="font-semibold">Excerpt:</span>{" "}
-            {results.extraction.excerpt || "—"}
+            <span className="font-semibold">Introduction:</span>{" "}
+            {results.extraction.introduction || "—"}
           </div>
         </div>
 
@@ -1018,7 +1038,7 @@ setResults({
       </div>
       <div>
         <span className="font-semibold">Reason:</span>{" "}
-        {results.claude.highestImpactEdit.reason}
+        {results.claude.highestImpactEdit.why || results.claude.highestImpactEdit.reason || "—"}
       </div>
     </div>
   </div>
