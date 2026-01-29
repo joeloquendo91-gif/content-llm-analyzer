@@ -840,10 +840,10 @@ setResults({
             {results.nlp.primaryCategory?.name || "N/A"}
           </div>
           <div className="text-sm text-indigo-600">
-            {results.nlp.primaryCategory
-              ? `${(results.nlp.primaryCategory.confidence * 100).toFixed(1)}%`
-              : ""}
-          </div>
+  {results?.nlp?.primaryCategory
+    ? `${((results.nlp.primaryCategory.confidence || 0) * 100).toFixed(1)}%`
+    : ""}
+</div>
         </div>
 
         <div className="p-4 bg-purple-50 rounded-lg">
@@ -945,7 +945,7 @@ setResults({
     </div>
 
     {/* Intent & Clarity Recommendations (A–E) */}
-    {results?.claude && (
+{results?.claude && (
   <div className="bg-white rounded-xl shadow-lg p-6">
     <h2 className="text-xl font-bold text-gray-800 mb-4">
       Intent & Clarity Recommendations
@@ -981,69 +981,79 @@ setResults({
     )}
 
     {/* C */}
-    {Array.isArray(results.claude.topMixedSignals) && results.claude.topMixedSignals.length > 0 && (
-      <div className="p-4 bg-yellow-50 rounded-lg mb-3">
-        <div className="font-semibold text-gray-800 mb-2">
-          C. Top Mixed Signals
+    {Array.isArray(results.claude.topMixedSignals) &&
+      results.claude.topMixedSignals.length > 0 && (
+        <div className="p-4 bg-yellow-50 rounded-lg mb-3">
+          <div className="font-semibold text-gray-800 mb-2">
+            C. Top Mixed Signals
+          </div>
+          <ul className="space-y-2">
+            {results.claude.topMixedSignals.map((s, idx) => (
+              <li key={idx} className="text-sm text-gray-700 flex gap-2">
+                <span className="text-gray-500">•</span>
+                <span>{s}</span>
+              </li>
+            ))}
+          </ul>
         </div>
-        <ul className="space-y-2">
-          {results.claude.topMixedSignals.map((s, idx) => (
-            <li key={idx} className="text-sm text-gray-700 flex gap-2">
-              <span className="text-gray-500">•</span>
-              <span>{s}</span>
-            </li>
-          ))}
-        </ul>
+      )}
+
+    {/* Highest-impact edit (show even if suggestedEdits is empty) */}
+    {results?.claude?.highestImpactEdit && (
+      <div className="p-4 bg-amber-50 rounded-lg border border-amber-200 mb-4">
+        <div className="font-semibold text-gray-800 mb-2">
+          Highest-Impact Edit
+        </div>
+
+        <div className="text-sm text-gray-700">
+          <div className="mb-1">
+            <span className="font-semibold">Location:</span>{" "}
+            {results.claude.highestImpactEdit.location || "—"}
+          </div>
+          <div className="mb-1">
+            <span className="font-semibold">Change:</span>{" "}
+            {results.claude.highestImpactEdit.change || "—"}
+          </div>
+          <div>
+            <span className="font-semibold">Reason:</span>{" "}
+            {results.claude.highestImpactEdit.reason ||
+              results.claude.highestImpactEdit.why ||
+              "—"}
+          </div>
+        </div>
       </div>
     )}
-{/* Highest-impact edit (show even if suggestedEdits is empty) */}
-{results?.claude?.highestImpactEdit && (
-  <div className="p-4 bg-amber-50 rounded-lg border border-amber-200 mb-4">
-    <div className="font-semibold text-gray-800 mb-2">Highest-Impact Edit</div>
-
-    <div className="text-sm text-gray-700">
-      <div className="mb-1">
-        <span className="font-semibold">Location:</span>{" "}
-        {results.claude.highestImpactEdit.location || "—"}
-      </div>
-      <div className="mb-1">
-        <span className="font-semibold">Change:</span>{" "}
-        {results.claude.highestImpactEdit.change || "—"}
-      </div>
-      <div>
-        <span className="font-semibold">Reason:</span>{" "}
-        {results.claude.highestImpactEdit.reason || "—"}
-      </div>
-    </div>
-  </div>
-)}
 
     {/* D */}
-    {Array.isArray(results.claude.suggestedEdits) && results.claude.suggestedEdits.length > 0 && (
-      <div className="p-4 bg-green-50 rounded-lg mb-3">
-        <div className="font-semibold text-gray-800 mb-2">
-          D. Suggested Non-Destructive Edits
+    {Array.isArray(results.claude.suggestedEdits) &&
+      results.claude.suggestedEdits.length > 0 && (
+        <div className="p-4 bg-green-50 rounded-lg mb-3">
+          <div className="font-semibold text-gray-800 mb-2">
+            D. Suggested Non-Destructive Edits
+          </div>
+          <div className="space-y-3">
+            {results.claude.suggestedEdits.map((e, idx) => (
+              <div
+                key={idx}
+                className="bg-white border border-green-200 rounded-lg p-3"
+              >
+                <div className="text-sm text-gray-700">
+                  <span className="font-semibold">Location:</span>{" "}
+                  {e.location || "—"}
+                </div>
+                <div className="text-sm text-gray-700 mt-1">
+                  <span className="font-semibold">Change:</span>{" "}
+                  {e.change || "—"}
+                </div>
+                <div className="text-sm text-gray-700 mt-1">
+                  <span className="font-semibold">Reason:</span>{" "}
+                  {e.reason || "—"}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="space-y-3">
-          {results.claude.suggestedEdits.map((e, idx) => (
-            <div key={idx} className="bg-white border border-green-200 rounded-lg p-3">
-              <div className="text-sm text-gray-700">
-                <span className="font-semibold">Location:</span>{" "}
-                {e.location || "—"}
-              </div>
-              <div className="text-sm text-gray-700 mt-1">
-                <span className="font-semibold">Change:</span>{" "}
-                {e.change || "—"}
-              </div>
-              <div className="text-sm text-gray-700 mt-1">
-                <span className="font-semibold">Reason:</span>{" "}
-                {e.reason || "—"}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    )}
+      )}
 
     {/* E */}
     {results.claude.expectedOutcome && (
@@ -1058,9 +1068,6 @@ setResults({
     )}
   </div>
 )}
-  </div>
-)}
-
         {/* Footer */}
         <div className="mt-8 text-center text-sm text-gray-600">
           <p>Built with Google Cloud Natural Language API & Anthropic Claude</p>
