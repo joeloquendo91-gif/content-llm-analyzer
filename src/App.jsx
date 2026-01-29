@@ -498,7 +498,7 @@ CategoryMatchStatus rules:
 - If target primary matches detected primary: "PRIMARY MATCH"
 - If target primary differs but page still supports it partially: "WRONG PRIORITY"
 - If target primary strongly conflicts with detected primary: "PRIMARY MISMATCH"
-
+`;
 
   // ---- API CALL ----
 
@@ -779,7 +779,7 @@ setResults({
             </div>
           )}
         </div>
-
+      </div>
 {/* Results */}
 {results && (
   <div className="space-y-6">
@@ -1016,8 +1016,8 @@ setResults({
           </div>
           <div>
             <span className="font-semibold">Reason:</span>{" "}
-            {results.claude.highestImpactEdit.reason ||
-              results.claude.highestImpactEdit.why ||
+            {results.claude.highestImpactEdit.why ||
+              results.claude.highestImpactEdit.reason ||
               "—"}
           </div>
         </div>
