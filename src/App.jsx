@@ -404,26 +404,28 @@ TASKS
 4) Recommend Non-Destructive Edits (NO rewrites, NO tone change, NO big section adds/removals)
 5) Explain the Why (why each edit improves interpretability for AI/search)
 
-RETURN JSON ONLY. NO MARKDOWN. Use exactly this schema:
+Return JSON ONLY (no markdown). Use exactly this schema:
 
 {
-  "alignmentExplanation": "A. Current Interpretation Summary (1–2 sentences)\\n\\nB. Intent Alignment Assessment (Aligned/Partially aligned/Mixed + brief reason)",
-  "groundingScore": 0-100,
-  "groundingExplanation": "E. Expected Outcome (1–2 sentences on improved clarity + reduced intent competition)",
   "categoryMatchStatus": "PRIMARY MATCH|WRONG PRIORITY|PRIMARY MISMATCH|No intent specified",
-  "keyImprovements": {
-    "h1": "D. Suggested Non-Destructive Edits — H1/Title: Location + change + reason",
-    "structure": "D. Suggested Non-Destructive Edits — Headings/Order: Location + change + reason (reference specific extracted headings)",
-    "intro": "D. Suggested Non-Destructive Edits — Intro: Location + change + reason",
-    "topRecommendations": [
-      "C. Top Mixed Signals — #1 ...",
-      "C. Top Mixed Signals — #2 ...",
-      "C. Top Mixed Signals — #3 ... (optional)",
-      "D. Edit — Location + change + reason",
-      "D. Edit — Location + change + reason"
-    ]
-  }
+  "groundingScore": 0-100,
+  "groundingExplanation": "1–4 sentences. Why this score. Must reference Title + at least 2 headings from the extracted outline.",
+  "currentInterpretationSummary": "A. 1–2 sentences",
+  "intentAlignmentAssessment": {
+    "status": "Aligned|Partially aligned|Mixed",
+    "reason": "B. 1–3 sentences"
+  },
+  "topMixedSignals": ["C. Signal 1", "C. Signal 2", "C. Signal 3 (optional)", "C. Signal 4 (optional)"],
+  "suggestedEdits": [
+    {
+      "location": "D. Where on page (e.g., H1, Intro paragraph, H2: '...', section order)",
+      "change": "D. The minimal edit (rename/reorder/bridge sentence tweak)",
+      "reason": "D. Why this improves interpretability for AI/search"
+    }
+  ],
+  "expectedOutcome": "E. 1–2 sentences"
 }
+
 
 CategoryMatchStatus rules:
 - If no target primary/secondary provided: "No intent specified"
@@ -876,61 +878,100 @@ setResults({
       )}
     </div>
 
-    {/* Key Improvements */}
-    {results.claude.keyImprovements && (
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">
-          Key Improvements
-        </h2>
+    {/* Intent & Clarity Recommendations (A–E) */}
+    {results?.claude && (
+  <div className="bg-white rounded-xl shadow-lg p-6">
+    <h2 className="text-xl font-bold text-gray-800 mb-4">
+      Intent & Clarity Recommendations
+    </h2>
 
-        <div className="space-y-4">
-          {results.claude.keyImprovements.h1 && (
-            <div className="p-4 bg-indigo-50 rounded-lg">
-              <div className="font-semibold text-gray-800 mb-2">H1</div>
-              <p className="text-sm text-gray-700 whitespace-pre-line">
-                {results.claude.keyImprovements.h1}
-              </p>
-            </div>
-          )}
-
-          {results.claude.keyImprovements.structure && (
-            <div className="p-4 bg-purple-50 rounded-lg">
-              <div className="font-semibold text-gray-800 mb-2">Structure</div>
-              <p className="text-sm text-gray-700 whitespace-pre-line">
-                {results.claude.keyImprovements.structure}
-              </p>
-            </div>
-          )}
-
-          {results.claude.keyImprovements.intro && (
-            <div className="p-4 bg-blue-50 rounded-lg">
-              <div className="font-semibold text-gray-800 mb-2">Intro</div>
-              <p className="text-sm text-gray-700 whitespace-pre-line">
-                {results.claude.keyImprovements.intro}
-              </p>
-            </div>
-          )}
-
-          {results.claude.keyImprovements.topRecommendations && (
-            <div className="p-4 bg-green-50 rounded-lg">
-              <div className="font-semibold text-gray-800 mb-3">
-                Top Recommendations
-              </div>
-              <ul className="space-y-2">
-                {results.claude.keyImprovements.topRecommendations.map(
-                  (rec, idx) => (
-                    <li key={idx} className="flex items-start gap-2">
-                      <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
-                      <span className="text-sm text-gray-700">{rec}</span>
-                    </li>
-                  )
-                )}
-              </ul>
-            </div>
-          )}
+    {/* A */}
+    {results.claude.currentInterpretationSummary && (
+      <div className="p-4 bg-gray-50 rounded-lg mb-3">
+        <div className="font-semibold text-gray-800 mb-1">
+          A. Current Interpretation Summary
+        </div>
+        <div className="text-sm text-gray-700">
+          {results.claude.currentInterpretationSummary}
         </div>
       </div>
     )}
+
+    {/* B */}
+    {results.claude.intentAlignmentAssessment && (
+      <div className="p-4 bg-blue-50 rounded-lg mb-3">
+        <div className="font-semibold text-gray-800 mb-1">
+          B. Intent Alignment Assessment
+        </div>
+        <div className="text-sm text-gray-700">
+          <span className="font-semibold">
+            {results.claude.intentAlignmentAssessment.status || "—"}
+          </span>
+          {results.claude.intentAlignmentAssessment.reason
+            ? ` — ${results.claude.intentAlignmentAssessment.reason}`
+            : ""}
+        </div>
+      </div>
+    )}
+
+    {/* C */}
+    {Array.isArray(results.claude.topMixedSignals) && results.claude.topMixedSignals.length > 0 && (
+      <div className="p-4 bg-yellow-50 rounded-lg mb-3">
+        <div className="font-semibold text-gray-800 mb-2">
+          C. Top Mixed Signals
+        </div>
+        <ul className="space-y-2">
+          {results.claude.topMixedSignals.map((s, idx) => (
+            <li key={idx} className="text-sm text-gray-700 flex gap-2">
+              <span className="text-gray-500">•</span>
+              <span>{s}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
+
+    {/* D */}
+    {Array.isArray(results.claude.suggestedEdits) && results.claude.suggestedEdits.length > 0 && (
+      <div className="p-4 bg-green-50 rounded-lg mb-3">
+        <div className="font-semibold text-gray-800 mb-2">
+          D. Suggested Non-Destructive Edits
+        </div>
+
+        <div className="space-y-3">
+          {results.claude.suggestedEdits.map((e, idx) => (
+            <div key={idx} className="bg-white border border-green-200 rounded-lg p-3">
+              <div className="text-sm text-gray-700">
+                <span className="font-semibold">Location:</span>{" "}
+                {e.location || "—"}
+              </div>
+              <div className="text-sm text-gray-700 mt-1">
+                <span className="font-semibold">Change:</span>{" "}
+                {e.change || "—"}
+              </div>
+              <div className="text-sm text-gray-700 mt-1">
+                <span className="font-semibold">Reason:</span>{" "}
+                {e.reason || "—"}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    {/* E */}
+    {results.claude.expectedOutcome && (
+      <div className="p-4 bg-purple-50 rounded-lg">
+        <div className="font-semibold text-gray-800 mb-1">
+          E. Expected Outcome
+        </div>
+        <div className="text-sm text-gray-700">
+          {results.claude.expectedOutcome}
+        </div>
+      </div>
+    )}
+  </div>
+)}
   </div>
 )}
 
