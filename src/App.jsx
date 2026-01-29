@@ -427,7 +427,7 @@ B) Intent Alignment Assessment
 - Classify overall alignment as Aligned, Partially aligned, or Mixed, and explain why.
 
 C) Top Mixed Signals
-- Identify the top 3–6 elements that weaken clarity.
+- Identify the top 2–4 elements that weaken clarity.
 - Examples include:
   - Broad or generic introductions
   - Headings signaling a different audience
@@ -435,7 +435,7 @@ C) Top Mixed Signals
   - Section order that delays context
 
 D) Suggested Non-Destructive Edits
-- Recommend specific, minimal edits 6 - 8 such as:
+- Recommend specific, minimal edits such as:
   - Intro framing tweaks
   - Heading renames or reordering
   - Short bridge or context-setting sentences
@@ -465,13 +465,10 @@ Return JSON ONLY (no markdown). Use exactly this schema:
   "topMixedSignals": [
     "C. Signal 1",
     "C. Signal 2",
-    "C. Signal 3",
-    "C. Signal 4",
-    "C. Signal 5 (optional)",
-    "C. Signal 6 (optional)"
+    "C. Signal 3 (optional)",
+    "C. Signal 4 (optional)"
   ],
   "suggestedEdits": [
-  // MUST contain 6 items
     {
       "location": "D. Where on page (e.g., Intro paragraph, H1, H2: '...')",
       "change": "D. The minimal edit",
@@ -485,13 +482,6 @@ Return JSON ONLY (no markdown). Use exactly this schema:
   },
   "expectedOutcome": "E. 1–2 sentences"
 }
-
-RULES (MANDATORY):
-- suggestedEdits MUST contain exactly 6 items.
-- highestImpactEdit MUST be one of the 6 suggestedEdits.
-- highestImpactEdit should be the edit with the greatest clarity or intent-alignment impact.
-- Do NOT invent new sections or rewrite content.
-- Prefer micro-edits: heading rename, section reorder, intro framing, bridge sentence, audience clarification.
 
 CategoryMatchStatus rules:
 - If no target primary/secondary provided: "No intent specified"
@@ -779,7 +769,7 @@ setResults({
             </div>
           )}
         </div>
-      </div>
+
 {/* Results */}
 {results && (
   <div className="space-y-6">
@@ -827,66 +817,78 @@ setResults({
       </div>
     )}
 
-{/* Category Detection */}
-<div className="bg-white rounded-xl shadow-lg p-6">
-  <h2 className="text-xl font-bold text-gray-800 mb-4">Category Detection</h2>
+    {/* Category Detection */}
+    <div className="bg-white rounded-xl shadow-lg p-6">
+      <h2 className="text-xl font-bold text-gray-800 mb-4">
+        Category Detection
+      </h2>
 
-  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-    <div className="p-4 bg-indigo-50 rounded-lg">
-      <div className="text-sm text-gray-600 mb-1">Detected Primary</div>
-      <div className="font-semibold">{results.nlp.primaryCategory?.name || "N/A"}</div>
-      <div className="text-sm text-indigo-600">
-        {results?.nlp?.primaryCategory
-          ? (((results.nlp.primaryCategory.confidence ?? 0) * 100).toFixed(1) + "%")
-          : ""}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div className="p-4 bg-indigo-50 rounded-lg">
+          <div className="text-sm text-gray-600 mb-1">Detected Primary</div>
+          <div className="font-semibold">
+            {results.nlp.primaryCategory?.name || "N/A"}
+          </div>
+          <div className="text-sm text-indigo-600">
+            {results.nlp.primaryCategory
+              ? `${(results.nlp.primaryCategory.confidence * 100).toFixed(1)}%`
+              : ""}
+          </div>
+        </div>
+
+        <div className="p-4 bg-purple-50 rounded-lg">
+          <div className="text-sm text-gray-600 mb-1">Detected Secondary</div>
+          <div className="font-semibold">
+            {results.nlp.secondaryCategory?.name || "None"}
+          </div>
+          <div className="text-sm text-purple-600">
+            {results.nlp.secondaryCategory
+              ? `${(results.nlp.secondaryCategory.confidence * 100).toFixed(1)}%`
+              : ""}
+          </div>
+        </div>
+
+        <div className="p-4 bg-blue-50 rounded-lg">
+          <div className="text-sm text-gray-600 mb-1">Clarity Gap</div>
+          <div className="font-semibold">
+            {(results.nlp.clarityGap * 100).toFixed(1)}%
+          </div>
+          <div
+            className={`text-sm font-medium ${
+              results.nlp.alignmentStatus === "Aligned"
+                ? "text-green-600"
+                : results.nlp.alignmentStatus === "Mixed (Acceptable)"
+                ? "text-yellow-600"
+                : "text-red-600"
+            }`}
+          >
+            {results.nlp.alignmentStatus}
+          </div>
+        </div>
       </div>
-    </div>
 
-    <div className="p-4 bg-purple-50 rounded-lg">
-      <div className="text-sm text-gray-600 mb-1">Detected Secondary</div>
-      <div className="font-semibold">{results.nlp.secondaryCategory?.name || "None"}</div>
-      <div className="text-sm text-purple-600">
-        {results?.nlp?.secondaryCategory
-          ? (((results.nlp.secondaryCategory.confidence ?? 0) * 100).toFixed(1) + "%")
-          : ""}
-      </div>
+      {results.claude?.categoryMatchStatus && (
+        <div
+          className={`p-4 rounded-lg border-2 ${
+            results.claude.categoryMatchStatus.includes("MATCH") &&
+            !results.claude.categoryMatchStatus.includes("MISMATCH")
+              ? "bg-green-50 border-green-300"
+              : results.claude.categoryMatchStatus.includes("WRONG PRIORITY")
+              ? "bg-yellow-50 border-yellow-300"
+              : results.claude.categoryMatchStatus.includes("MISMATCH")
+              ? "bg-red-50 border-red-300"
+              : "bg-gray-50 border-gray-300"
+          }`}
+        >
+          <div className="font-semibold text-gray-800 mb-1">
+            Category Match Status
+          </div>
+          <div className="text-sm">
+            {results.claude.categoryMatchStatus}
+          </div>
+        </div>
+      )}
     </div>
-
-    <div className="p-4 bg-blue-50 rounded-lg">
-      <div className="text-sm text-gray-600 mb-1">Clarity Gap</div>
-      <div className="font-semibold">{((results.nlp.clarityGap ?? 0) * 100).toFixed(1)}%</div>
-      <div
-        className={`text-sm font-medium ${
-          results.nlp.alignmentStatus === "Aligned"
-            ? "text-green-600"
-            : results.nlp.alignmentStatus === "Mixed (Acceptable)"
-            ? "text-yellow-600"
-            : "text-red-600"
-        }`}
-      >
-        {results.nlp.alignmentStatus}
-      </div>
-    </div>
-  </div>
-
-  {results.claude?.categoryMatchStatus && (
-    <div
-      className={`p-4 rounded-lg border-2 ${
-        results.claude.categoryMatchStatus.includes("MATCH") &&
-        !results.claude.categoryMatchStatus.includes("MISMATCH")
-          ? "bg-green-50 border-green-300"
-          : results.claude.categoryMatchStatus.includes("WRONG PRIORITY")
-          ? "bg-yellow-50 border-yellow-300"
-          : results.claude.categoryMatchStatus.includes("MISMATCH")
-          ? "bg-red-50 border-red-300"
-          : "bg-gray-50 border-gray-300"
-      }`}
-    >
-      <div className="font-semibold text-gray-800 mb-1">Category Match Status</div>
-      <div className="text-sm">{results.claude.categoryMatchStatus}</div>
-    </div>
-  )}
-</div>
 
     {/* Grounding Analysis */}
     <div className="bg-white rounded-xl shadow-lg p-6">
@@ -939,63 +941,98 @@ setResults({
       Intent & Clarity Recommendations
     </h2>
 
-    {/* Highest-impact edit (show even if suggestedEdits is empty) */}
-    {results?.claude?.highestImpactEdit && (
-      <div className="p-4 bg-amber-50 rounded-lg border border-amber-200 mb-4">
-        <div className="font-semibold text-gray-800 mb-2">
-          Highest-Impact Edit
+    {/* A */}
+    {results.claude.currentInterpretationSummary && (
+      <div className="p-4 bg-gray-50 rounded-lg mb-3">
+        <div className="font-semibold text-gray-800 mb-1">
+          A. Current Interpretation Summary
         </div>
-
         <div className="text-sm text-gray-700">
-          <div className="mb-1">
-            <span className="font-semibold">Location:</span>{" "}
-            {results.claude.highestImpactEdit.location || "—"}
-          </div>
-          <div className="mb-1">
-            <span className="font-semibold">Change:</span>{" "}
-            {results.claude.highestImpactEdit.change || "—"}
-          </div>
-          <div>
-            <span className="font-semibold">Reason:</span>{" "}
-            {results.claude.highestImpactEdit.why ||
-              results.claude.highestImpactEdit.reason ||
-              "—"}
-          </div>
+          {results.claude.currentInterpretationSummary}
         </div>
       </div>
     )}
 
-    {/* D */}
-    {Array.isArray(results.claude.suggestedEdits) &&
-      results.claude.suggestedEdits.length > 0 && (
-        <div className="p-4 bg-green-50 rounded-lg mb-3">
-          <div className="font-semibold text-gray-800 mb-2">
-            D. Suggested Non-Destructive Edits
-          </div>
-
-          <div className="space-y-3">
-            {results.claude.suggestedEdits.map((e, idx) => (
-              <div
-                key={idx}
-                className="bg-white border border-green-200 rounded-lg p-3"
-              >
-                <div className="text-sm text-gray-700">
-                  <span className="font-semibold">Location:</span>{" "}
-                  {e.location || "—"}
-                </div>
-                <div className="text-sm text-gray-700 mt-1">
-                  <span className="font-semibold">Change:</span>{" "}
-                  {e.change || "—"}
-                </div>
-                <div className="text-sm text-gray-700 mt-1">
-                  <span className="font-semibold">Reason:</span>{" "}
-                  {e.reason || "—"}
-                </div>
-              </div>
-            ))}
-          </div>
+    {/* B */}
+    {results.claude.intentAlignmentAssessment && (
+      <div className="p-4 bg-blue-50 rounded-lg mb-3">
+        <div className="font-semibold text-gray-800 mb-1">
+          B. Intent Alignment Assessment
         </div>
-      )}
+        <div className="text-sm text-gray-700">
+          <span className="font-semibold">
+            {results.claude.intentAlignmentAssessment.status || "—"}
+          </span>
+          {results.claude.intentAlignmentAssessment.reason
+            ? ` — ${results.claude.intentAlignmentAssessment.reason}`
+            : ""}
+        </div>
+      </div>
+    )}
+
+    {/* C */}
+    {Array.isArray(results.claude.topMixedSignals) && results.claude.topMixedSignals.length > 0 && (
+      <div className="p-4 bg-yellow-50 rounded-lg mb-3">
+        <div className="font-semibold text-gray-800 mb-2">
+          C. Top Mixed Signals
+        </div>
+        <ul className="space-y-2">
+          {results.claude.topMixedSignals.map((s, idx) => (
+            <li key={idx} className="text-sm text-gray-700 flex gap-2">
+              <span className="text-gray-500">•</span>
+              <span>{s}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
+
+    {/* D */}
+    {Array.isArray(results.claude.suggestedEdits) && results.claude.suggestedEdits.length > 0 && (
+      <div className="p-4 bg-green-50 rounded-lg mb-3">
+        <div className="font-semibold text-gray-800 mb-2">
+          D. Suggested Non-Destructive Edits
+        </div>
+{results?.claude?.highestImpactEdit && (
+  <div className="p-4 bg-amber-50 rounded-lg border border-amber-200 mb-4">
+    <div className="font-semibold text-gray-800 mb-2">Highest-Impact Edit</div>
+
+    <div className="text-sm text-gray-700">
+      <div className="mb-1">
+        <span className="font-semibold">Location:</span>{" "}
+        {results.claude.highestImpactEdit.location}
+      </div>
+      <div className="mb-1">
+        <span className="font-semibold">Change:</span>{" "}
+        {results.claude.highestImpactEdit.change}
+      </div>
+      <div>
+        <span className="font-semibold">Reason:</span>{" "}
+        {results.claude.highestImpactEdit.reason}
+      </div>
+    </div>
+  </div>
+)}
+        <div className="space-y-3">
+          {results.claude.suggestedEdits.map((e, idx) => (
+            <div key={idx} className="bg-white border border-green-200 rounded-lg p-3">
+              <div className="text-sm text-gray-700">
+                <span className="font-semibold">Location:</span>{" "}
+                {e.location || "—"}
+              </div>
+              <div className="text-sm text-gray-700 mt-1">
+                <span className="font-semibold">Change:</span>{" "}
+                {e.change || "—"}
+              </div>
+              <div className="text-sm text-gray-700 mt-1">
+                <span className="font-semibold">Reason:</span>{" "}
+                {e.reason || "—"}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
 
     {/* E */}
     {results.claude.expectedOutcome && (
@@ -1010,6 +1047,9 @@ setResults({
     )}
   </div>
 )}
+  </div>
+)}
+
         {/* Footer */}
         <div className="mt-8 text-center text-sm text-gray-600">
           <p>Built with Google Cloud Natural Language API & Anthropic Claude</p>
