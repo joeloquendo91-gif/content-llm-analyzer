@@ -993,7 +993,26 @@ setResults({
         <div className="font-semibold text-gray-800 mb-2">
           D. Suggested Non-Destructive Edits
         </div>
+{results?.claude?.highestImpactEdit && (
+  <div className="p-4 bg-amber-50 rounded-lg border border-amber-200 mb-4">
+    <div className="font-semibold text-gray-800 mb-2">Highest-Impact Edit</div>
 
+    <div className="text-sm text-gray-700">
+      <div className="mb-1">
+        <span className="font-semibold">Location:</span>{" "}
+        {results.claude.highestImpactEdit.location}
+      </div>
+      <div className="mb-1">
+        <span className="font-semibold">Change:</span>{" "}
+        {results.claude.highestImpactEdit.change}
+      </div>
+      <div>
+        <span className="font-semibold">Reason:</span>{" "}
+        {results.claude.highestImpactEdit.reason}
+      </div>
+    </div>
+  </div>
+)}
         <div className="space-y-3">
           {results.claude.suggestedEdits.map((e, idx) => (
             <div key={idx} className="bg-white border border-green-200 rounded-lg p-3">
