@@ -39,75 +39,98 @@ function extractHeadings(root) {
   });
 }
 
-// NEW: More aggressive extraction that tries multiple strategies
-function extractHeadingsMultiStrategy(document, articleContent) {
-  let headings = [];
+// NEW: Extract ALL headings from raw HTML, then intelligently filter
+function extractAllHeadings(document) {
+  // Step 1: Get EVERY heading from the page
+  const allHeadings = extractHeadings(document);
   
-  // Strategy 1: From Readability article HTML (best for main content)
-  if (articleContent) {
-    const articleDom = new JSDOM(articleContent);
-    headings = extractHeadings(articleDom.window.document);
+  if (allHeadings.length === 0) {
+    return [];
   }
   
-  // Strategy 2: If we got good headings (5+), use them
-  if (headings.length >= 5) {
-    return headings;
-  }
+  // Step 2: Identify likely navigation/footer headings to exclude
+  const likelyNavFooter = new Set();
   
-  // Strategy 3: Try common main content containers
-  const contentSelectors = [
-    'main',
-    'article',
-    '[role="main"]',
-    '#main-content',
-    '#content',
-    '.main-content',
-    '.content',
-    '#mw-content-text', // Wikipedia
-  ];
-  
-  for (const selector of contentSelectors) {
-    const container = document.querySelector(selector);
-    if (container) {
-      const containerHeadings = extractHeadings(container);
-      if (containerHeadings.length > headings.length) {
-        headings = containerHeadings;
+  allHeadings.forEach((heading, index) => {
+    const text = heading.text.toLowerCase();
+    
+    // Pattern 1: Common nav/footer text
+    const navFooterPatterns = [
+      /^menu$/,
+      /^navigation$/,
+      /^skip to/,
+      /^search$/,
+      /^footer$/,
+      /^header$/,
+      /^sidebar$/,
+      /^follow us$/,
+      /^contact us$/,
+      /^privacy preference/,
+      /^manage consent/,
+      /^vendors? list$/,
+      /^cookie (settings|preferences)/,
+      /^strictly necessary$/,
+      /^analytics$/,
+      /^advertising$/,
+      /^social media$/,
+    ];
+    
+    // Pattern 2: Common footer categories (often appear together)
+    const footerCategories = [
+      'about us',
+      'contact',
+      'privacy',
+      'terms',
+      'careers',
+      'legal',
+      'sitemap',
+    ];
+    
+    // If matches nav/footer pattern, mark it
+    if (navFooterPatterns.some(pattern => pattern.test(text))) {
+      likelyNavFooter.add(index);
+      return;
+    }
+    
+    // Pattern 3: If it's part of a cluster of footer-y headings
+    // (e.g., "About us", "Terms", "Privacy" appearing together)
+    if (footerCategories.some(cat => text.includes(cat))) {
+      // Check if there are other footer headings nearby (within 5 positions)
+      const nearbyFooterCount = allHeadings
+        .slice(Math.max(0, index - 5), Math.min(allHeadings.length, index + 6))
+        .filter(h => footerCategories.some(cat => h.text.toLowerCase().includes(cat)))
+        .length;
+      
+      // If 3+ footer-category headings are clustered together, likely footer section
+      if (nearbyFooterCount >= 3) {
+        likelyNavFooter.add(index);
       }
     }
-  }
+  });
   
-  // Strategy 4: If still not enough, extract from full document
-  if (headings.length < 3) {
-    const allHeadings = extractHeadings(document);
-    
-    // Filter out likely navigation/footer headings
-    const filtered = allHeadings.filter(h => {
+  // Step 3: Remove nav/footer headings
+  const contentHeadings = allHeadings.filter((_, index) => !likelyNavFooter.has(index));
+  
+  // Step 4: If we filtered out too much (left with < 3 headings), be less aggressive
+  if (contentHeadings.length < 3 && allHeadings.length >= 3) {
+    // Only remove the obvious ones (strict patterns only)
+    const strictFiltered = allHeadings.filter(h => {
       const text = h.text.toLowerCase();
-      // Skip common nav/footer headings
-      const skipPatterns = [
-        /^menu$/,
-        /^navigation$/,
-        /^skip to/,
-        /^search$/,
-        /^footer$/,
-        /^header$/,
-        /^sidebar$/,
-        /^related (posts|articles|links)$/,
-        /^share this/,
-        /^follow us$/,
-        /^contact us$/
-      ];
-      
-      return !skipPatterns.some(pattern => pattern.test(text));
+      return !(
+        text === 'menu' ||
+        text === 'navigation' ||
+        text === 'footer' ||
+        text === 'header' ||
+        text.startsWith('skip to') ||
+        text === 'privacy preference center' ||
+        text === 'manage consent preferences' ||
+        text === 'vendors list'
+      );
     });
-    
-    // Use filtered headings if we got more than before
-    if (filtered.length > headings.length) {
-      headings = filtered;
-    }
+    return strictFiltered;
   }
   
-  return headings;
+  return contentHeadings;
 }
 
 export default async function handler(req, res) {
@@ -134,12 +157,13 @@ export default async function handler(req, res) {
     const dom = new JSDOM(html, { url });
     const document = dom.window.document;
 
-    // Main article extraction
+    // Main article extraction (for title, excerpt, text)
     const reader = new Readability(document);
     const article = reader.parse();
 
-    // Extract headings using multi-strategy approach
-    const headings = extractHeadingsMultiStrategy(document, article?.content);
+    // CRITICAL: Extract headings from RAW HTML BEFORE Readability filters anything
+    // This ensures we capture ALL on-page headings, then filter intelligently
+    const headings = extractAllHeadings(document);
 
     return res.status(200).json({
       title: article?.title || document.title || "",
