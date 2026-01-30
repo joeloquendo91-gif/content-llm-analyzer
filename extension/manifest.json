@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Content LLM Analyzer",
+  "version": "0.1.0",
+  "description": "Analyze the current page in Content LLM Analyzer",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Analyze this page"
+  },
+  "permissions": ["activeTab", "tabs"]
+}
