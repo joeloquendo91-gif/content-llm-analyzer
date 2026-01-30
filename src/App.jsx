@@ -316,51 +316,68 @@ const extractIntroduction = (text) => {
 
 
   const analyzeWithGoogleNLP = async (content) => {
-    const response = await fetch(
-      `https://language.googleapis.com/v1/documents:classifyText?key=${googleApiKey}`,
-      {
+    // If user provided their own API key, use it directly
+    if (googleApiKey && googleApiKey.trim()) {
+      const response = await fetch(
+        `https://language.googleapis.com/v1/documents:classifyText?key=${googleApiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            document: { type: 'PLAIN_TEXT', content: content.slice(0, 20000) }
+          })
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Google NLP API error');
+      }
+
+      const data = await response.json();
+      
+      if (!data.categories || data.categories.length === 0) {
+        return {
+          categories: [],
+          primaryCategory: null,
+          secondaryCategory: null,
+          clarityGap: 0,
+          alignmentStatus: 'No categories detected'
+        };
+      }
+
+      const sorted = data.categories.sort((a, b) => b.confidence - a.confidence);
+      const primary = sorted[0];
+      const secondary = sorted[1] || null;
+      const clarityGap = secondary ? (primary.confidence - secondary.confidence) : primary.confidence;
+
+      let alignmentStatus;
+      if (clarityGap >= 0.3) alignmentStatus = 'Aligned';
+      else if (clarityGap >= 0.15) alignmentStatus = 'Mixed (Acceptable)';
+      else alignmentStatus = 'Misaligned';
+
+      return {
+        categories: sorted,
+        primaryCategory: primary,
+        secondaryCategory: secondary,
+        clarityGap,
+        alignmentStatus
+      };
+    } else {
+      // Use backend API (with backend's Google key)
+      const response = await fetch('/api/google-nlp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          document: { type: 'PLAIN_TEXT', content: content.slice(0, 20000) }
-        })
+        body: JSON.stringify({ content: content.slice(0, 20000) })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Google NLP API error');
       }
-    );
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error?.message || 'Google NLP API error');
+      return await response.json();
     }
-
-    const data = await response.json();
-    
-    if (!data.categories || data.categories.length === 0) {
-      return {
-        categories: [],
-        primaryCategory: null,
-        secondaryCategory: null,
-        clarityGap: 0,
-        alignmentStatus: 'No categories detected'
-      };
-    }
-
-    const sorted = data.categories.sort((a, b) => b.confidence - a.confidence);
-    const primary = sorted[0];
-    const secondary = sorted[1] || null;
-    const clarityGap = secondary ? (primary.confidence - secondary.confidence) : primary.confidence;
-
-    let alignmentStatus;
-    if (clarityGap >= 0.3) alignmentStatus = 'Aligned';
-    else if (clarityGap >= 0.15) alignmentStatus = 'Mixed (Acceptable)';
-    else alignmentStatus = 'Misaligned';
-
-    return {
-      categories: sorted,
-      primaryCategory: primary,
-      secondaryCategory: secondary,
-      clarityGap,
-      alignmentStatus
-    };
   };
 
   const analyzeWithClaude = async (content, nlpResults, extraction) => {
@@ -547,7 +564,7 @@ CategoryMatchStatus rules:
 };
 
   const handleAnalyze = async () => {
-    if ((!url && !manualContent) || !googleApiKey) {
+    if ((!url && !manualContent)) {
       setError('Please fill in content (URL or manual)');
       return;
     }
@@ -623,7 +640,7 @@ setResults({
           {showApiHelp && (
             <div className="mt-4 space-y-3 text-sm text-blue-900">
               <div>
-                <strong>Google Cloud API Key:</strong>
+                <strong>Google Cloud API Key (Optional):</strong>
                 <ol className="list-decimal ml-5 mt-1 space-y-1">
                   <li>Go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener" className="underline">Google Cloud Console</a></li>
                   <li>Create a new project (or select existing)</li>
@@ -632,6 +649,7 @@ setResults({
                   <li>Copy the key (starts with "AIza...")</li>
                 </ol>
                 <p className="mt-2 text-blue-700">Cost: ~$0.001 per analysis (5,000 free per month)</p>
+                <p className="mt-1 text-blue-600 font-semibold">Or leave blank to use our backend API (no setup required)</p>
               </div>
               
               <div>
@@ -745,15 +763,18 @@ setResults({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Google Cloud API Key *
+                  Google Cloud API Key (Optional)
                 </label>
                 <input
                   type="password"
                   value={googleApiKey}
                   onChange={(e) => setGoogleApiKey(e.target.value)}
-                  placeholder="AIza..."
+                  placeholder="AIza... (leave blank to use backend)"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Provide your own key for full privacy, or leave blank to use our API
+                </p>
               </div>
             </div>
 
