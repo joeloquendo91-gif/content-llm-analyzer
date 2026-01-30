@@ -282,17 +282,17 @@ const fetchWithTimeout = (resource, options = {}, timeoutMs = 20000) =>
     if (source === 'extension') {
       console.log('Detected extension source, checking for stored data...');
       
-      // Try to get data from Chrome extension storage
-      if (typeof chrome !== 'undefined' && chrome.storage) {
-        chrome.storage.local.get(['extractedContent'], (result) => {
-          if (result.extractedContent) {
-            const extracted = result.extractedContent;
-            console.log('Loaded extension data:', {
+      // Check localStorage first (might already be there)
+      const checkLocalStorage = () => {
+        const stored = localStorage.getItem('clmExtensionData');
+        if (stored) {
+          try {
+            const extracted = JSON.parse(stored);
+            console.log('✅ Loaded extension data from localStorage:', {
               headings: extracted.headings?.length,
               title: extracted.title
             });
             
-            // Store the extracted data
             setExtensionData({
               title: extracted.title || "Untitled",
               introduction: extracted.introduction || "",
@@ -304,11 +304,30 @@ const fetchWithTimeout = (resource, options = {}, timeoutMs = 20000) =>
             setUrl(extracted.url || '');
             setUseManualInput(false);
             
-            // Clear the stored data after loading
-            chrome.storage.local.remove(['extractedContent']);
+            // Clear after loading
+            localStorage.removeItem('clmExtensionData');
+          } catch (e) {
+            console.error('Failed to parse extension data:', e);
           }
-        });
-      }
+        }
+      };
+      
+      // Check immediately
+      checkLocalStorage();
+      
+      // Also listen for storage events (in case data arrives after page load)
+      const handleStorage = () => {
+        checkLocalStorage();
+      };
+      window.addEventListener('storage', handleStorage);
+      
+      // Check again after a short delay (in case extension is still injecting)
+      setTimeout(checkLocalStorage, 500);
+      setTimeout(checkLocalStorage, 1500);
+      
+      return () => {
+        window.removeEventListener('storage', handleStorage);
+      };
     } else if (incomingUrl) {
       // Regular URL (no extension data)
       setUrl(incomingUrl);
