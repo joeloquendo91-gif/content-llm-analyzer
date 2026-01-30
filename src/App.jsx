@@ -292,7 +292,7 @@ const fetchUrlContent = async (targetUrl) => {
     throw new Error(data?.error || `Failed to fetch URL (status ${response.status})`);
   }
 
-  // data: { title, excerpt, headings[], text }
+  // data: { title, introduction, headings[], text }
   return data;
 };
 
@@ -489,7 +489,7 @@ Return JSON ONLY (no markdown). Use exactly this schema:
   "highestImpactEdit": {
     "location": "D2. Where on page (MUST be different from the 6 edits above)",
     "change": "D2. The single highest-impact edit (e.g., major title rewrite, key H1 change)",
-    "why": "D2. Why this specific edit has exceptional impact compared to all others"
+    "reason": "D2. Why this specific edit has exceptional impact compared to all others"
   },
   "expectedOutcome": "E. 1–2 sentences"
 }
@@ -1038,7 +1038,7 @@ setResults({
       </div>
       <div>
         <span className="font-semibold">Reason:</span>{" "}
-        {results.claude.highestImpactEdit.why || results.claude.highestImpactEdit.reason || "—"}
+        {results.claude.highestImpactEdit.reason || "—"}
       </div>
     </div>
   </div>
