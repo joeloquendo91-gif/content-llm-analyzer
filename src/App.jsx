@@ -263,6 +263,7 @@ export default function ContentAnalyzer() {
   const [results, setResults] = useState(null);
   const [error, setError] = useState('');
   const [showApiHelp, setShowApiHelp] = useState(false);
+  const [extensionData, setExtensionData] = useState(null); // NEW: Store extension data
 
 const fetchWithTimeout = (resource, options = {}, timeoutMs = 20000) =>
   Promise.race([
@@ -274,10 +275,44 @@ const fetchWithTimeout = (resource, options = {}, timeoutMs = 20000) =>
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const source = params.get("source");
     const incomingUrl = params.get("url");
-    if (incomingUrl) {
+    
+    // Check if data came from Chrome extension
+    if (source === 'extension') {
+      console.log('Detected extension source, checking for stored data...');
+      
+      // Try to get data from Chrome extension storage
+      if (typeof chrome !== 'undefined' && chrome.storage) {
+        chrome.storage.local.get(['extractedContent'], (result) => {
+          if (result.extractedContent) {
+            const extracted = result.extractedContent;
+            console.log('Loaded extension data:', {
+              headings: extracted.headings?.length,
+              title: extracted.title
+            });
+            
+            // Store the extracted data
+            setExtensionData({
+              title: extracted.title || "Untitled",
+              introduction: extracted.introduction || "",
+              headings: extracted.headings || [],
+              text: extracted.text || "",
+              source: 'extension'
+            });
+            
+            setUrl(extracted.url || '');
+            setUseManualInput(false);
+            
+            // Clear the stored data after loading
+            chrome.storage.local.remove(['extractedContent']);
+          }
+        });
+      }
+    } else if (incomingUrl) {
+      // Regular URL (no extension data)
       setUrl(incomingUrl);
-      setUseManualInput(false); // switch to URL mode
+      setUseManualInput(false);
     }
   }, []);
 
@@ -663,6 +698,11 @@ if (useManualInput && manualContent) {
     headings: [],
     text: manualContent
   };
+} else if (extensionData) {
+  // NEW: Use data from Chrome extension (already has all headings!)
+  console.log('Using extension data with', extensionData.headings.length, 'headings');
+  contentText = extensionData.text;
+  extraction = extensionData;
 } else if (url) {
   extraction = await fetchUrlContent(url);
   contentText = extraction.text;
@@ -750,6 +790,16 @@ setResults({
 
         {/* Input Form */}
         <div className="bg-white rounded-xl shadow-lg p-6 md:p-8 mb-6">
+          {/* Extension Data Indicator */}
+          {extensionData && (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-sm text-green-800">
+                <strong>✓ Chrome Extension Data</strong> - Content extracted from rendered page 
+                ({extensionData.headings.length} headings captured, including JavaScript-rendered content)
+              </p>
+            </div>
+          )}
+          
           <div className="space-y-4">
             <div className="flex items-center gap-4 pb-4 border-b">
               <label className="flex items-center gap-2 cursor-pointer">
