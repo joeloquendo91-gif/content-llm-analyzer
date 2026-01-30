@@ -4,7 +4,7 @@ import { Readability } from "@mozilla/readability";
 function cleanHeadingText(el) {
   const clone = el.cloneNode(true);
 
-  // Remove common “junk” that appears inside headings (esp. Wikipedia)
+  // Remove common "junk" that appears inside headings (esp. Wikipedia)
   clone
     .querySelectorAll(
       ".mw-editsection, sup.reference, .reference, .noprint, .mw-anchor"
@@ -39,6 +39,77 @@ function extractHeadings(root) {
   });
 }
 
+// NEW: More aggressive extraction that tries multiple strategies
+function extractHeadingsMultiStrategy(document, articleContent) {
+  let headings = [];
+  
+  // Strategy 1: From Readability article HTML (best for main content)
+  if (articleContent) {
+    const articleDom = new JSDOM(articleContent);
+    headings = extractHeadings(articleDom.window.document);
+  }
+  
+  // Strategy 2: If we got good headings (5+), use them
+  if (headings.length >= 5) {
+    return headings;
+  }
+  
+  // Strategy 3: Try common main content containers
+  const contentSelectors = [
+    'main',
+    'article',
+    '[role="main"]',
+    '#main-content',
+    '#content',
+    '.main-content',
+    '.content',
+    '#mw-content-text', // Wikipedia
+  ];
+  
+  for (const selector of contentSelectors) {
+    const container = document.querySelector(selector);
+    if (container) {
+      const containerHeadings = extractHeadings(container);
+      if (containerHeadings.length > headings.length) {
+        headings = containerHeadings;
+      }
+    }
+  }
+  
+  // Strategy 4: If still not enough, extract from full document
+  if (headings.length < 3) {
+    const allHeadings = extractHeadings(document);
+    
+    // Filter out likely navigation/footer headings
+    const filtered = allHeadings.filter(h => {
+      const text = h.text.toLowerCase();
+      // Skip common nav/footer headings
+      const skipPatterns = [
+        /^menu$/,
+        /^navigation$/,
+        /^skip to/,
+        /^search$/,
+        /^footer$/,
+        /^header$/,
+        /^sidebar$/,
+        /^related (posts|articles|links)$/,
+        /^share this/,
+        /^follow us$/,
+        /^contact us$/
+      ];
+      
+      return !skipPatterns.some(pattern => pattern.test(text));
+    });
+    
+    // Use filtered headings if we got more than before
+    if (filtered.length > headings.length) {
+      headings = filtered;
+    }
+  }
+  
+  return headings;
+}
+
 export default async function handler(req, res) {
   try {
     const url = req.query?.url;
@@ -67,20 +138,8 @@ export default async function handler(req, res) {
     const reader = new Readability(document);
     const article = reader.parse();
 
-    // ---- HEADINGS: Readability-first, fallback to real DOM containers ----
-    let headings = [];
-
-    // 1) Try headings from Readability article HTML (best for “main content”)
-    if (article?.content) {
-      const articleDom = new JSDOM(article.content);
-      headings = extractHeadings(articleDom.window.document);
-    }
-
-    // 2) Fallback: Wikipedia main content container
-    if (!headings.length) {
-      const wikiRoot = document.querySelector("#mw-content-text");
-      headings = wikiRoot ? extractHeadings(wikiRoot) : extractHeadings(document);
-    }
+    // Extract headings using multi-strategy approach
+    const headings = extractHeadingsMultiStrategy(document, article?.content);
 
     return res.status(200).json({
       title: article?.title || document.title || "",
