@@ -488,12 +488,75 @@ D2) Highest-Impact Edit
 E) Expected Outcome
 - In 1–2 sentences, explain how these changes would improve interpretability and reduce intent competition.
 
+GROUNDING ANALYSIS (MANDATORY EVIDENCE-BASED SCORING):
+
+Your grounding score MUST be based on verifiable evidence from the extracted outline.
+
+Required References in Your Explanation:
+1. Quote the exact title
+2. List at least 3 specific H2 headings from the outline
+3. Quote any explicit prerequisite or audience statements from the introduction
+4. Cite specific numbers (heading counts, percentages, etc.)
+
+Scoring Criteria (Total: 100 points):
+
+Title Clarity (25 points):
+- Does it specify format? (tutorial, guide, reference, documentation, etc.) +6
+- Does it specify audience? (beginner, developer, designer, intermediate, etc.) +6
+- Does it specify scope? (specific topics, tools, technologies covered) +6
+- Does it promise outcome? (learn to build X, master Y, understand Z, etc.) +7
+Award points for each element clearly present in the title.
+
+Structural Alignment (30 points):
+- Count how many H2 headings directly relate to title promises
+- Formula: (Aligned H2s / Total H2s) × 30
+- Generic headings like "Introduction", "Overview", "Conclusion" count as 0.5× aligned
+- Specific headings that match title topics count as 1× aligned
+Example: Title promises "useState and useEffect" → both must appear as H2s for full points
+
+Introduction Anchoring (20 points):
+- Explicit prerequisites stated: +10 points (quote them)
+- Explicit audience/skill level stated: +10 points (quote it)
+- If only implied (not stated): award 5 points each
+Example: "Requires React 16.8+" is explicit. "If you know React..." is implied.
+
+Content Verification (15 points):
+- Do all title-promised topics appear as H2s? +8 points
+- Is scope maintained (no unrelated sections)? +4 points
+- Is heading hierarchy logical (H2 → H3 progression)? +3 points
+
+Audience Definition (10 points):
+- Lower bound defined (prerequisites/prior knowledge stated): +5 points
+- Upper bound defined (what's NOT covered or beyond scope): +5 points
+
+CRITICAL REQUIREMENTS FOR YOUR EXPLANATION:
+✓ Start by quoting the exact title (in quotes)
+✓ List at least 3 specific H2 headings
+✓ Show your math: "4 of 6 H2s aligned = 67% = 20 points"
+✓ Quote explicit statements when present: "Introduction states 'requires X'"
+✓ Identify specific weaknesses with evidence
+✓ Make it verifiable from the outline alone
+
+GOOD EXAMPLE:
+"Score: 82/100. Title 'React Hooks Tutorial: Complete Beginner's Guide' specifies format (tutorial +6) and audience (beginner +6) but promises 'complete' coverage while only addressing 2 hooks (scope clarity +3/6). The 6 H2s are: 'Introduction', 'What are Hooks?', 'useState Hook', 'useEffect Hook', 'Common Mistakes', 'Next Steps'. Four H2s directly support hooks topic (67% alignment = 20/30pts). Introduction states 'assumes basic React knowledge' (explicit prerequisite +10pts) but doesn't define upper bound (no 'will NOT cover' statement, +0/5pts). Generic 'Introduction' H2 reduces specificity (-2pts)."
+
+BAD EXAMPLE:
+"Score: 85/100. The content is well-organized with clear structure that supports the main topic. Good progression and logical flow."
+(No evidence, no specifics, not verifiable)
+
+VERIFICATION CHECKLIST (complete before finalizing):
+□ Did I quote the exact title?
+□ Did I list at least 3 specific H2 headings?
+□ Did I cite explicit statements from introduction?
+□ Did I show my math for the score calculation?
+□ Is my explanation verifiable from the outline alone?
+
 Return JSON ONLY (no markdown). Use exactly this schema:
 
 {
   "categoryMatchStatus": "PRIMARY MATCH|WRONG PRIORITY|PRIMARY MISMATCH|No intent specified",
   "groundingScore": 0-100,
-  "groundingExplanation": "1–4 sentences explaining the score. Must reference the Title and at least two headings from the extracted outline.",
+  "groundingExplanation": "MUST reference: (1) exact title in quotes, (2) at least 3 specific H2 headings, (3) any explicit prerequisite/audience statements, (4) show score calculation math. Example: 'Title \"X\" specifies format (+6) and audience (+6). H2s \"A\", \"B\", \"C\" directly support (3 of 5 = 60% = 18/30pts). Introduction states \"requires Y\" (+10pts). Score: 78/100'",
   "currentInterpretationSummary": "A. 1–2 sentences",
   "intentAlignmentAssessment": {
     "status": "Aligned|Partially aligned|Mixed",
@@ -564,9 +627,23 @@ CategoryMatchStatus rules:
 };
 
   const handleAnalyze = async () => {
-    if ((!url && !manualContent)) {
-      setError('Please fill in content (URL or manual)');
-      return;
+    // Debug logging
+    console.log('Debug - handleAnalyze called');
+    console.log('Debug - useManualInput:', useManualInput);
+    console.log('Debug - url:', url);
+    console.log('Debug - manualContent:', manualContent ? `${manualContent.substring(0, 50)}...` : 'empty');
+    
+    // Validate based on mode
+    if (useManualInput) {
+      if (!manualContent || manualContent.trim() === '') {
+        setError('Please paste your content in the text area');
+        return;
+      }
+    } else {
+      if (!url || url.trim() === '') {
+        setError('Please enter a URL to analyze');
+        return;
+      }
     }
 
     setLoading(true);
@@ -622,7 +699,7 @@ setResults({
             <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Content LLM Analyzer</h1>
           </div>
           <p className="text-gray-600 text-sm md:text-base">
-            Analyze how search engines and LLMs categorize your content. Get actionable recommendations to improve ranking and grounding.
+            Analyze how search engines and LLMs categorize your content. Get actionable recommendations to improve ranking and content clarity.
           </p>
         </div>
 
@@ -951,15 +1028,18 @@ setResults({
       )}
     </div>
 
-    {/* Grounding Analysis */}
+    {/* Content Clarity Analysis */}
     <div className="bg-white rounded-xl shadow-lg p-6">
       <h2 className="text-xl font-bold text-gray-800 mb-4">
-        Grounding Analysis
+        Content Clarity Analysis
       </h2>
+      <p className="text-sm text-gray-600 mb-4">
+        Measures how clearly your title, headings, and introduction communicate your content's purpose to AI systems
+      </p>
 
       <div className="mb-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="font-semibold">Grounding Score</span>
+          <span className="font-semibold">Content Clarity Score</span>
           <span className="text-2xl font-bold text-indigo-600">
             {results.claude.groundingScore}/100
           </span>
