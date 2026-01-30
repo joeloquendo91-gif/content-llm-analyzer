@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Search, AlertCircle, CheckCircle, TrendingUp, Info, X } from 'lucide-react';
+import { useEffect } from "react";
 
 // Google NLP Content Categories
 const GOOGLE_CATEGORIES = [
@@ -271,7 +272,16 @@ const fetchWithTimeout = (resource, options = {}, timeoutMs = 20000) =>
     ),
   ]);
 
-const fetchUrlContent = async (targetUrl) => {
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const incomingUrl = params.get("url");
+    if (incomingUrl) {
+      setUrl(incomingUrl);
+      setUseManualInput(false); // switch to URL mode
+    }
+  }, []);
+
+  const fetchUrlContent = async (targetUrl) => {
   const response = await fetch(`/api/extract?url=${encodeURIComponent(targetUrl)}`);
 
   // Always read as text first (server might return HTML/text on errors)
