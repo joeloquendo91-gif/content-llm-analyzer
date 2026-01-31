@@ -368,6 +368,62 @@ const extractIntroduction = (text) => {
   return first250 + (words.length > 250 ? '...' : '');
 };
 
+// Parse content clarity explanation into structured sections
+const parseContentClarityExplanation = (explanation) => {
+  if (!explanation) return null;
+  
+  // Extract score
+  const scoreMatch = explanation.match(/Score:\s*(\d+)\/100/);
+  const score = scoreMatch ? parseInt(scoreMatch[1]) : null;
+  
+  const parsed = {
+    score,
+    sections: []
+  };
+  
+  // Try to extract title analysis
+  const titleMatch = explanation.match(/Title\s+['"](.*?)['"]([^.]+\.)/);
+  if (titleMatch) {
+    parsed.sections.push({
+      type: 'title',
+      label: 'Title Analysis',
+      content: `Title: "${titleMatch[1]}"${titleMatch[2]}`
+    });
+  }
+  
+  // Try to extract headings analysis
+  const headingsMatch = explanation.match(/(The \d+ H2s.*?(?:\d+\/\d+pts|alignment)\.)/);
+  if (headingsMatch) {
+    parsed.sections.push({
+      type: 'headings',
+      label: 'Heading Structure',
+      content: headingsMatch[1]
+    });
+  }
+  
+  // Try to extract introduction analysis
+  const introMatch = explanation.match(/(Introduction.*?(?:\d+pts|audience)\.)/);
+  if (introMatch) {
+    parsed.sections.push({
+      type: 'introduction',
+      label: 'Introduction Quality',
+      content: introMatch[1]
+    });
+  }
+  
+  // Try to extract structure/topics
+  const structureMatch = explanation.match(/(All.*?topics.*?\.)/);
+  if (structureMatch) {
+    parsed.sections.push({
+      type: 'structure',
+      label: 'Content Structure',
+      content: structureMatch[1]
+    });
+  }
+  
+  return parsed;
+};
+
 
   const analyzeWithGoogleNLP = async (content) => {
     // If user provided their own API key, use it directly
@@ -994,8 +1050,10 @@ setResults({
             {results.extraction.title || "—"}
           </div>
           <div>
-            <span className="font-semibold">Introduction:</span>{" "}
-            {results.extraction.introduction || "—"}
+            <span className="font-semibold">Introduction:</span>
+            <div className="mt-2 text-sm text-gray-700 whitespace-pre-line leading-relaxed">
+              {results.extraction.introduction || "—"}
+            </div>
           </div>
         </div>
 
@@ -1129,7 +1187,58 @@ setResults({
       </div>
 
       <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-700">
-        {results.claude.groundingExplanation}
+        {(() => {
+          const parsed = parseContentClarityExplanation(results.claude.groundingExplanation);
+          
+          if (parsed && parsed.sections.length > 0) {
+            return (
+              <div className="space-y-4">
+                {/* Score Summary */}
+                <div className="pb-3 border-b border-gray-300">
+                  <span className="font-semibold text-gray-900">Overall Assessment:</span>
+                  <span className="ml-2">Score {parsed.score}/100</span>
+                </div>
+                
+                {/* Structured Sections */}
+                <div className="grid gap-3">
+                  {parsed.sections.map((section, idx) => (
+                    <div key={idx} className="bg-white p-3 rounded border border-gray-200">
+                      <div className="flex items-start gap-2">
+                        <div className={`flex-shrink-0 w-2 h-2 mt-1.5 rounded-full ${
+                          section.type === 'title' ? 'bg-blue-500' :
+                          section.type === 'headings' ? 'bg-green-500' :
+                          section.type === 'introduction' ? 'bg-purple-500' :
+                          'bg-orange-500'
+                        }`} />
+                        <div className="flex-1">
+                          <div className="font-semibold text-gray-900 text-xs uppercase tracking-wide mb-1">
+                            {section.label}
+                          </div>
+                          <div className="text-sm text-gray-700 leading-relaxed">
+                            {section.content}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Full explanation as fallback */}
+                <details className="mt-3">
+                  <summary className="cursor-pointer text-xs text-gray-500 hover:text-gray-700">
+                    View full analysis
+                  </summary>
+                  <div className="mt-2 text-xs text-gray-600 leading-relaxed">
+                    {results.claude.groundingExplanation}
+                  </div>
+                </details>
+              </div>
+            );
+          }
+          
+          // Fallback: show original if parsing fails
+          return results.claude.groundingExplanation;
+        })()}
       </div>
 
       {results.claude.alignmentExplanation && (
