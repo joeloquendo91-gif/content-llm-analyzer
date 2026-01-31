@@ -75,20 +75,28 @@ function extractPageContent() {
       mainContent = document.querySelector(selector);
       if (mainContent) break;
     }
-    
     // If no main content found, use body (but skip nav/header/footer)
     if (!mainContent) {
       mainContent = document.body;
     }
     
+    // Remove navigation, header, footer, sidebars from consideration
+    const elementsToSkip = mainContent.querySelectorAll('nav, header, footer, aside, .sidebar, .navigation, .menu, [role="navigation"], [role="banner"], [role="contentinfo"]');
+    elementsToSkip.forEach(el => el.setAttribute('data-skip-intro', 'true'));
+    
     // Get all paragraph elements from main content
     const paragraphs = Array.from(mainContent.querySelectorAll('p'))
+      .filter(p => {
+        // Skip if parent is marked to skip
+        if (p.closest('[data-skip-intro]')) return false;
+        return true;
+      })
       .map(p => p.textContent.trim())
       .filter(text => {
         // Filter out short paragraphs (likely navigation/footer)
-        if (text.length < 50) return false;
+        if (text.length < 80) return false;
         
-        // Filter out common navigation text
+        // Filter out common navigation/promotional text
         const skipPatterns = [
           /^menu$/i,
           /^navigation$/i,
@@ -99,16 +107,25 @@ function extractPageContent() {
           /^copyright/i,
           /^all rights reserved/i,
           /^share this/i,
-          /^follow us/i
+          /^follow us/i,
+          /find a center/i,
+          /schedule now/i,
+          /call \d{3}-\d{3}-\d{4}/i,
+          /^\d{3}-\d{3}-\d{4}$/,
+          /^last updated/i,
+          /^written by/i,
+          /^table of contents/i,
+          /^learn more about/i,
+          /the .* difference/i
         ];
         
         return !skipPatterns.some(pattern => pattern.test(text));
       });
     
-    // Get first 2-3 substantial paragraphs (150-200 words total)
+    // Get first 2-3 substantial paragraphs (120-150 words total)
     let introduction = '';
     let wordCount = 0;
-    const targetWords = 150;
+    const targetWords = 120;
     
     for (const para of paragraphs) {
       if (wordCount >= targetWords) break;
@@ -138,14 +155,35 @@ function extractPageContent() {
       }
     }
     
-    // Fallback: if we didn't get enough content, use full text method
-    if (wordCount < 50) {
-      const fullText = mainContent.innerText.replace(/\s+/g, ' ').trim();
-      const words = fullText.split(/\s+/);
-      introduction = words.slice(0, 150).join(' ') + (words.length > 150 ? '...' : '');
+    // Fallback: if we didn't get enough content, use a different strategy
+    if (wordCount < 30) {
+      // Try to find content after the first H1
+      const h1 = document.querySelector('h1');
+      if (h1) {
+        let currentElement = h1.nextElementSibling;
+        const contentParts = [];
+        let words = 0;
+        
+        while (currentElement && words < 150) {
+          if (currentElement.tagName === 'P' && currentElement.textContent.trim().length > 50) {
+            const text = currentElement.textContent.trim();
+            contentParts.push(text);
+            words += text.split(/\s+/).length;
+          }
+          // Stop at next heading
+          if (/^H[1-6]$/.test(currentElement.tagName)) {
+            break;
+          }
+          currentElement = currentElement.nextElementSibling;
+        }
+        
+        if (contentParts.length > 0) {
+          introduction = contentParts.join('\n\n');
+        }
+      }
     }
     
-    return introduction;
+    return introduction || 'No introduction content found.';
   }
   
   const introduction = extractIntroduction();

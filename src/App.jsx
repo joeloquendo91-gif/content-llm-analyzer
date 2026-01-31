@@ -381,44 +381,85 @@ const parseContentClarityExplanation = (explanation) => {
     sections: []
   };
   
-  // Try to extract title analysis
-  const titleMatch = explanation.match(/Title\s+['"](.*?)['"]([^.]+\.)/);
-  if (titleMatch) {
+  // Split into sentences for analysis
+  const sentences = explanation.split(/\.\s+/);
+  
+  // Try to extract title analysis (usually first)
+  const titleSentences = sentences.filter(s => 
+    s.includes('Title') && (s.includes('specifies') || s.includes('format') || s.includes('audience') || s.includes('scope'))
+  );
+  if (titleSentences.length > 0) {
     parsed.sections.push({
       type: 'title',
       label: 'Title Analysis',
-      content: `Title: "${titleMatch[1]}"${titleMatch[2]}`
+      content: titleSentences.join('. ') + '.'
     });
   }
   
-  // Try to extract headings analysis
-  const headingsMatch = explanation.match(/(The \d+ H2s.*?(?:\d+\/\d+pts|alignment)\.)/);
-  if (headingsMatch) {
+  // Extract headings analysis
+  const headingsSentences = sentences.filter(s => 
+    (s.includes('H2') || s.toLowerCase().includes('headings')) && 
+    (s.includes('%') || s.includes('alignment') || s.includes('support'))
+  );
+  if (headingsSentences.length > 0) {
     parsed.sections.push({
       type: 'headings',
       label: 'Heading Structure',
-      content: headingsMatch[1]
+      content: headingsSentences.join('. ') + '.'
     });
   }
   
-  // Try to extract introduction analysis
-  const introMatch = explanation.match(/(Introduction.*?(?:\d+pts|audience)\.)/);
-  if (introMatch) {
+  // Extract introduction analysis
+  const introSentences = sentences.filter(s => 
+    s.includes('Introduction') || s.includes('introduction')
+  );
+  if (introSentences.length > 0) {
     parsed.sections.push({
       type: 'introduction',
       label: 'Introduction Quality',
-      content: introMatch[1]
+      content: introSentences.join('. ') + '.'
     });
   }
   
-  // Try to extract structure/topics
-  const structureMatch = explanation.match(/(All.*?topics.*?\.)/);
-  if (structureMatch) {
+  // Extract content verification/structure
+  const structureSentences = sentences.filter(s => 
+    s.includes('Content verification') || 
+    s.includes('topics') || 
+    s.includes('hierarchy') || 
+    s.includes('scope maintained') ||
+    s.includes('logical')
+  );
+  if (structureSentences.length > 0) {
     parsed.sections.push({
       type: 'structure',
       label: 'Content Structure',
-      content: structureMatch[1]
+      content: structureSentences.join('. ') + '.'
     });
+  }
+  
+  // Extract issues/weaknesses
+  const issueSentences = sentences.filter(s => {
+    const lower = s.toLowerCase();
+    return lower.includes('lacks') || 
+           lower.includes('no explicit') || 
+           lower.includes('dilut') ||
+           lower.includes('weak') ||
+           lower.includes('missing') ||
+           lower.includes('generic') ||
+           (s.includes('-') && (lower.includes('pts') || lower.includes('points')));
+  });
+  if (issueSentences.length > 0) {
+    parsed.sections.push({
+      type: 'issues',
+      label: 'Areas for Improvement',
+      content: issueSentences.join('. ') + '.',
+      isNegative: true
+    });
+  }
+  
+  // If we got very few sections, fall back to showing full text
+  if (parsed.sections.length < 2) {
+    return null; // Will trigger fallback display
   }
   
   return parsed;
@@ -1192,7 +1233,7 @@ setResults({
         {(() => {
           const parsed = parseContentClarityExplanation(results.claude.groundingExplanation);
           
-          if (parsed && parsed.sections.length > 0) {
+          if (parsed && parsed.sections.length >= 2) {
             return (
               <div className="space-y-4">
                 {/* Score Summary */}
@@ -1204,19 +1245,28 @@ setResults({
                 {/* Structured Sections */}
                 <div className="grid gap-3">
                   {parsed.sections.map((section, idx) => (
-                    <div key={idx} className="bg-white p-3 rounded border border-gray-200">
+                    <div key={idx} className={`p-3 rounded border ${
+                      section.isNegative 
+                        ? 'bg-red-50 border-red-200' 
+                        : 'bg-white border-gray-200'
+                    }`}>
                       <div className="flex items-start gap-2">
                         <div className={`flex-shrink-0 w-2 h-2 mt-1.5 rounded-full ${
                           section.type === 'title' ? 'bg-blue-500' :
                           section.type === 'headings' ? 'bg-green-500' :
                           section.type === 'introduction' ? 'bg-purple-500' :
+                          section.type === 'issues' ? 'bg-red-500' :
                           'bg-orange-500'
                         }`} />
                         <div className="flex-1">
-                          <div className="font-semibold text-gray-900 text-xs uppercase tracking-wide mb-1">
+                          <div className={`font-semibold text-xs uppercase tracking-wide mb-1 ${
+                            section.isNegative ? 'text-red-900' : 'text-gray-900'
+                          }`}>
                             {section.label}
                           </div>
-                          <div className="text-sm text-gray-700 leading-relaxed">
+                          <div className={`text-sm leading-relaxed ${
+                            section.isNegative ? 'text-red-800' : 'text-gray-700'
+                          }`}>
                             {section.content}
                           </div>
                         </div>
@@ -1225,7 +1275,7 @@ setResults({
                   ))}
                 </div>
                 
-                {/* Full explanation as fallback */}
+                {/* Full explanation as expandable */}
                 <details className="mt-3">
                   <summary className="cursor-pointer text-xs text-gray-500 hover:text-gray-700">
                     View full analysis
