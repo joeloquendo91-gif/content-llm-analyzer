@@ -603,7 +603,7 @@ GROUNDING ANALYSIS (MANDATORY EVIDENCE-BASED SCORING):
 Your grounding score MUST be based on verifiable evidence from the extracted outline.
 
 Required References in Your Explanation:
-1. Quote the exact title
+1. Quote the exact title (Note: The H1 heading and document title should be treated as the same for analysis - don't make separate recommendations for both)
 2. List at least 3 specific H2 headings from the outline
 3. Quote any explicit prerequisite or audience statements from the introduction
 4. Cite specific numbers (heading counts, percentages, etc.)
@@ -611,6 +611,8 @@ Required References in Your Explanation:
 Scoring Criteria (Total: 100 points):
 
 Title Clarity (25 points):
+IMPORTANT: The H1 and page title represent the same content promise to users. Do not treat them separately or recommend changes to both - they should align and be analyzed as one element.
+
 - Does it specify format? (tutorial, guide, reference, documentation, etc.) +6
 - Does it specify audience? (beginner, developer, designer, intermediate, etc.) +6
 - Does it specify scope? (specific topics, tools, technologies covered) +6
