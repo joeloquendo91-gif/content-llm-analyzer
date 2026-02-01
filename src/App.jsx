@@ -820,12 +820,18 @@ setResults({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 md:p-6">
+    <div className="min-h-screen p-4 md:p-6" style={{ background: 'linear-gradient(135deg, #eef0ff 0%, #f0e6ff 100%)' }}>
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="bg-white rounded-xl shadow-lg p-6 md:p-8 mb-6">
           <div className="flex items-center gap-3 mb-2">
-            <TrendingUp className="w-8 h-8 text-indigo-600" />
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: '#6c63ff' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <path d="M2 17l10 5 10-5"/>
+                <path d="M2 12l10 5 10-5"/>
+              </svg>
+            </div>
             <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Content LLM Analyzer</h1>
           </div>
           <p className="text-gray-600 text-sm md:text-base">
@@ -998,7 +1004,8 @@ setResults({
             <button
               onClick={handleAnalyze}
               disabled={loading}
-              className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full text-white py-3 rounded-lg font-semibold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                style={{ background: '#6c63ff', boxShadow: '0 2px 12px rgba(108,99,255,0.3)' }}
             >
               {loading ? (
                 <>
@@ -1075,14 +1082,23 @@ setResults({
         <div className="border rounded-lg p-4 bg-gray-50 max-h-72 overflow-auto">
           {results.extraction.headings?.length ? (
             <ul className="space-y-2">
-              {results.extraction.headings.map((h, idx) => (
-                <li key={idx} className="text-sm flex gap-2">
-                  <span className="w-10 font-mono text-gray-500">
-                    {String(h.level || "").toUpperCase()}
-                  </span>
-                  <span className="text-gray-800">{h.text}</span>
-                </li>
-              ))}
+              {results.extraction.headings.map((h, idx) => {
+                const level = String(h.level || "").toLowerCase();
+                const tagStyles = {
+                  h1: { bg: 'rgba(108,99,255,0.1)', color: '#6c63ff' },
+                  h2: { bg: 'rgba(52,211,153,0.1)', color: '#34d399' },
+                  h3: { bg: 'rgba(251,191,36,0.1)', color: '#fbbf24' },
+                };
+                const style = tagStyles[level] || { bg: 'rgba(248,113,113,0.1)', color: '#f87171' };
+                return (
+                  <li key={idx} className="text-sm flex items-baseline gap-2">
+                    <span className="flex-shrink-0 text-xs font-mono font-semibold text-center rounded" style={{ background: style.bg, color: style.color, width: '26px', padding: '1px 0' }}>
+                      {level.toUpperCase()}
+                    </span>
+                    <span className={level === 'h1' ? 'text-gray-800 font-medium' : 'text-gray-600'}>{h.text}</span>
+                  </li>
+                );
+              })}
             </ul>
           ) : (
             <div className="text-sm text-gray-600">
