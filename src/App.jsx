@@ -279,25 +279,18 @@ const fetchWithTimeout = (resource, options = {}, timeoutMs = 20000) =>
     const incomingUrl = params.get("url");
     
     if (source === 'extension') {
-      let found = false;
-      let attempts = 0;
-      const maxAttempts = 20; // 20 × 300ms = 6 seconds
-
-      const poll = () => {
-        if (found) return;
-
+      console.log('Detected extension source, checking for stored data...');
+      
+      const checkLocalStorage = () => {
         const stored = localStorage.getItem('clmExtensionData');
         if (stored) {
           try {
             const extracted = JSON.parse(stored);
-            found = true;
-            localStorage.removeItem('clmExtensionData');
-
             console.log('✅ Loaded extension data from localStorage:', {
               headings: extracted.headings?.length,
               title: extracted.title
             });
-
+            
             setExtensionData({
               title: extracted.title || "Untitled",
               introduction: extracted.introduction || "",
@@ -305,22 +298,32 @@ const fetchWithTimeout = (resource, options = {}, timeoutMs = 20000) =>
               text: extracted.text || "",
               source: 'extension'
             });
+            
             setUrl(extracted.url || '');
             setUseManualInput(false);
+            
+            localStorage.removeItem('clmExtensionData');
           } catch (e) {
             console.error('Failed to parse extension data:', e);
           }
-          return;
-        }
-
-        attempts++;
-        if (attempts < maxAttempts) {
-          setTimeout(poll, 300);
         }
       };
-
-      poll();
-
+      
+      // Check immediately
+      checkLocalStorage();
+      
+      // Also listen for storage events
+      const handleStorage = () => { checkLocalStorage(); };
+      window.addEventListener('storage', handleStorage);
+      
+      // Poll in case data arrives after initial check
+      setTimeout(checkLocalStorage, 500);
+      setTimeout(checkLocalStorage, 1500);
+      setTimeout(checkLocalStorage, 3000);
+      
+      return () => {
+        window.removeEventListener('storage', handleStorage);
+      };
     } else if (incomingUrl) {
       setUrl(incomingUrl);
       setUseManualInput(false);
