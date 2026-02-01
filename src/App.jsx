@@ -800,6 +800,7 @@ if (useManualInput && manualContent) {
   } else {
     contentText = extensionData.text;
   }
+  console.log('Debug - contentText length:', contentText?.length, 'first 100:', contentText?.slice(0, 100));
 } else if (url) {
   extraction = await fetchUrlContent(url);
   contentText = extraction.text;
