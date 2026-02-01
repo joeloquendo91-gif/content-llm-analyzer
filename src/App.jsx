@@ -789,10 +789,17 @@ if (useManualInput && manualContent) {
     text: manualContent
   };
 } else if (extensionData) {
-  // NEW: Use data from Chrome extension (already has all headings!)
+  // Use data from Chrome extension (already has all headings!)
   console.log('Using extension data with', extensionData.headings.length, 'headings');
-  contentText = extensionData.text;
   extraction = extensionData;
+  // text is stripped from the URL payload to keep it short — re-fetch it
+  if (!extensionData.text && extensionData.url) {
+    console.log('Re-fetching full text from URL...');
+    const fetched = await fetchUrlContent(extensionData.url);
+    contentText = fetched.text;
+  } else {
+    contentText = extensionData.text;
+  }
 } else if (url) {
   extraction = await fetchUrlContent(url);
   contentText = extraction.text;
