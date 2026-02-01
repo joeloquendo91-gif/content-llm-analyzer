@@ -129,38 +129,84 @@ document.getElementById('analyzeBtn').addEventListener('click', async () => {
   document.getElementById('loadingOverlay').classList.add('active');
 
   try {
-    // Inject data into the app via localStorage on the new tab
     const appUrl = 'https://content-llm-analyzer.vercel.app?source=extension';
     const newTab = await chrome.tabs.create({ url: appUrl });
 
-    // Wait for the app to load then inject data
-    const waitAndInject = (tabId, data, retries = 8) => {
-      return new Promise((resolve) => {
-        let attempt = 0;
-        const tryInject = () => {
-          attempt++;
-          chrome.scripting.executeScript({
-            target: { tabId: tabId },
-            func: (d) => {
-              localStorage.setItem('clmExtensionData', JSON.stringify(d));
-              return true;
-            },
-            args: [data]
-          }, (results) => {
-            if (chrome.runtime.lastError || !results?.[0]?.result) {
-              if (attempt < retries) setTimeout(tryInject, 400);
-              else resolve(false);
-            } else {
-              resolve(true);
-            }
-          });
-        };
-        setTimeout(tryInject, 600);
+    // Keep trying to inject until the app confirms it read the data
+    let injected = false;
+    let attempts = 0;
+    const maxAttempts = 30; // 30 × 200ms = 6 seconds
+
+    const tryInject = () => {
+      if (injected || attempts >= maxAttempts) return;
+      attempts++;
+
+      chrome.scripting.executeScript({
+        target: { tabId: newTab.id },
+        func: (d) => {
+          // Write data
+          localStorage.setItem('clmExtensionData', JSON.stringify(d));
+          // Check if app already consumed it (it removes the key after reading)
+          // Return whether the key is still there — if yes, app hasn't read it yet
+          return !!localStorage.getItem('clmExtensionData');
+        },
+        args: [extractedData]
+      }, (results) => {
+        if (chrome.runtime.lastError) {
+          // Page not ready yet, retry
+          setTimeout(tryInject, 200);
+          return;
+        }
+
+        const keyStillThere = results?.[0]?.result;
+
+        if (keyStillThere) {
+          // Data written, now poll to see if the app consumed it
+          pollForConsumption();
+        } else {
+          // Key already gone — app already read and removed it
+          injected = true;
+          window.close();
+        }
       });
     };
 
-    await waitAndInject(newTab.id, extractedData);
-    window.close();
+    // Poll to check if app has consumed (removed) the localStorage key
+    const pollForConsumption = () => {
+      chrome.scripting.executeScript({
+        target: { tabId: newTab.id },
+        func: () => {
+          return !!localStorage.getItem('clmExtensionData');
+        }
+      }, (results) => {
+        if (chrome.runtime.lastError) {
+          // Tab might have navigated, just close
+          window.close();
+          return;
+        }
+
+        const keyStillThere = results?.[0]?.result;
+
+        if (!keyStillThere) {
+          // App consumed the data — safe to close
+          injected = true;
+          window.close();
+        } else {
+          // Still there, keep polling
+          attempts++;
+          if (attempts < maxAttempts) {
+            setTimeout(pollForConsumption, 200);
+          } else {
+            // Timeout — close anyway, data is in localStorage
+            window.close();
+          }
+        }
+      });
+    };
+
+    // Start injection attempts
+    setTimeout(tryInject, 500); // Small delay for tab to start loading
+
   } catch (err) {
     document.getElementById('loadingOverlay').classList.remove('active');
     const box = document.getElementById('errorBox');
