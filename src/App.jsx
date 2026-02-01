@@ -255,11 +255,7 @@ const GOOGLE_CATEGORIES = [
 export default function ContentAnalyzer() {
   const [url, setUrl] = useState('');
   const [manualContent, setManualContent] = useState('');
-  const [useManualInput, setUseManualInput] = useState(() => {
-    // If opened from extension, start in URL mode immediately
-    const params = new URLSearchParams(window.location.search);
-    return params.get("source") !== 'extension';
-  });
+  const [useManualInput, setUseManualInput] = useState(false);
   const [intendedPrimary, setIntendedPrimary] = useState('');
   const [intendedSecondary, setIntendedSecondary] = useState('');
   const [googleApiKey, setGoogleApiKey] = useState('');
@@ -280,56 +276,36 @@ const fetchWithTimeout = (resource, options = {}, timeoutMs = 20000) =>
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const source = params.get("source");
+    const encodedData = params.get("data");
     const incomingUrl = params.get("url");
     
-    if (source === 'extension') {
-      console.log('Detected extension source, polling for data...');
-      
-      let found = false;
-      let attempts = 0;
-      const maxAttempts = 20; // 20 × 300ms = 6 seconds max wait
-      
-      const poll = () => {
-        if (found) return;
-        
-        const stored = localStorage.getItem('clmExtensionData');
-        if (stored) {
-          try {
-            const extracted = JSON.parse(stored);
-            found = true;
-            localStorage.removeItem('clmExtensionData');
-            
-            console.log('✅ Loaded extension data:', {
-              headings: extracted.headings?.length,
-              title: extracted.title
-            });
-            
-            setExtensionData({
-              title: extracted.title || "Untitled",
-              introduction: extracted.introduction || "",
-              headings: extracted.headings || [],
-              text: extracted.text || "",
-              source: 'extension'
-            });
-            setUrl(extracted.url || '');
-            setUseManualInput(false);
-          } catch (e) {
-            console.error('Failed to parse extension data:', e);
-          }
-          return;
+    if (source === 'extension' && encodedData) {
+      try {
+        // Safe UTF-8 base64 decode
+        const binary = atob(encodedData);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
         }
+        const decoded = JSON.parse(new TextDecoder().decode(bytes));
         
-        attempts++;
-        if (attempts < maxAttempts) {
-          setTimeout(poll, 300);
-        } else {
-          console.warn('Extension data not found after 6s timeout');
-        }
-      };
-      
-      // Start polling immediately
-      poll();
-      
+        console.log('✅ Loaded extension data from URL:', {
+          headings: decoded.headings?.length,
+          title: decoded.title
+        });
+        
+        setExtensionData({
+          title: decoded.title || "Untitled",
+          introduction: decoded.introduction || "",
+          headings: decoded.headings || [],
+          text: decoded.text || "",
+          source: 'extension'
+        });
+        setUrl(decoded.url || '');
+        setUseManualInput(false);
+      } catch (e) {
+        console.error('Failed to decode extension data:', e);
+      }
     } else if (incomingUrl) {
       setUrl(incomingUrl);
       setUseManualInput(false);
