@@ -294,6 +294,7 @@ const fetchWithTimeout = (resource, options = {}, timeoutMs = 20000) =>
           introduction: decoded.introduction || "",
           headings: decoded.headings || [],
           text: decoded.text || "",
+          url: decoded.url || "",
           source: 'extension'
         });
         setUrl(decoded.url || '');
