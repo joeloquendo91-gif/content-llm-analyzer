@@ -276,54 +276,31 @@ const fetchWithTimeout = (resource, options = {}, timeoutMs = 20000) =>
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const source = params.get("source");
+    const encodedData = params.get("data");
     const incomingUrl = params.get("url");
     
-    if (source === 'extension') {
-      console.log('Detected extension source, checking for stored data...');
-      
-      const checkLocalStorage = () => {
-        const stored = localStorage.getItem('clmExtensionData');
-        if (stored) {
-          try {
-            const extracted = JSON.parse(stored);
-            console.log('✅ Loaded extension data from localStorage:', {
-              headings: extracted.headings?.length,
-              title: extracted.title
-            });
-            
-            setExtensionData({
-              title: extracted.title || "Untitled",
-              introduction: extracted.introduction || "",
-              headings: extracted.headings || [],
-              text: extracted.text || "",
-              source: 'extension'
-            });
-            
-            setUrl(extracted.url || '');
-            setUseManualInput(false);
-            
-            localStorage.removeItem('clmExtensionData');
-          } catch (e) {
-            console.error('Failed to parse extension data:', e);
-          }
-        }
-      };
-      
-      // Check immediately
-      checkLocalStorage();
-      
-      // Also listen for storage events
-      const handleStorage = () => { checkLocalStorage(); };
-      window.addEventListener('storage', handleStorage);
-      
-      // Poll in case data arrives after initial check
-      setTimeout(checkLocalStorage, 500);
-      setTimeout(checkLocalStorage, 1500);
-      setTimeout(checkLocalStorage, 3000);
-      
-      return () => {
-        window.removeEventListener('storage', handleStorage);
-      };
+    if (source === 'extension' && encodedData) {
+      try {
+        // Decode: base64 → JSON
+        const decoded = JSON.parse(decodeURIComponent(escape(atob(encodedData))));
+        
+        console.log('✅ Loaded extension data from URL:', {
+          headings: decoded.headings?.length,
+          title: decoded.title
+        });
+        
+        setExtensionData({
+          title: decoded.title || "Untitled",
+          introduction: decoded.introduction || "",
+          headings: decoded.headings || [],
+          text: decoded.text || "",
+          source: 'extension'
+        });
+        setUrl(decoded.url || '');
+        setUseManualInput(false);
+      } catch (e) {
+        console.error('Failed to decode extension data:', e);
+      }
     } else if (incomingUrl) {
       setUrl(incomingUrl);
       setUseManualInput(false);
