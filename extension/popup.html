@@ -1,17 +1,488 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Content LLM Analyzer</title>
-    <style>
-      body { font-family: Arial, sans-serif; padding: 12px; width: 280px; }
-      button { width: 100%; padding: 10px; cursor: pointer; }
-      small { display:block; margin-top:10px; color:#555; }
-    </style>
-  </head>
-  <body>
-    <button id="open">Open Analyzer</button>
-    <small>If this shows, your popup works.</small>
-    <script src="popup.js"></script>
-  </body>
+<head>
+  <meta charset="UTF-8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface-hover: #222631;
+      --border: #2a2e3a;
+      --border-focus: #3d4257;
+      --text-primary: #f0f1f4;
+      --text-secondary: #7c8294;
+      --text-tertiary: #535a70;
+      --accent: #6c63ff;
+      --accent-dim: rgba(108, 99, 255, 0.12);
+      --green: #34d399;
+      --green-dim: rgba(52, 211, 153, 0.1);
+      --amber: #fbbf24;
+      --amber-dim: rgba(251, 191, 36, 0.1);
+      --red: #f87171;
+      --red-dim: rgba(248, 113, 113, 0.1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      width: 400px;
+      min-height: 100px;
+      background: var(--bg);
+      color: var(--text-primary);
+      font-family: 'Geist', -apple-system, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* ─── Header ─── */
+    .header {
+      padding: 18px 20px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo {
+      width: 28px;
+      height: 28px;
+      background: var(--accent);
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo svg {
+      width: 15px;
+      height: 15px;
+      stroke: white;
+      fill: none;
+      stroke-width: 2.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .header-title {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+      color: var(--text-primary);
+    }
+
+    .header-sub {
+      font-size: 10.5px;
+      color: var(--text-tertiary);
+      margin-top: 1px;
+    }
+
+    .heading-count-badge {
+      font-family: 'Geist Mono', monospace;
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--accent);
+      background: var(--accent-dim);
+      padding: 3px 8px;
+      border-radius: 20px;
+      letter-spacing: 0.3px;
+    }
+
+    /* ─── Row Sections ─── */
+    .rows {
+      padding: 12px 20px;
+    }
+
+    .row {
+      padding: 11px 0;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      transition: background 0.15s ease;
+    }
+
+    .row:last-child {
+      border-bottom: none;
+    }
+
+    .row-icon {
+      flex-shrink: 0;
+      width: 30px;
+      height: 30px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 1px;
+    }
+
+    .row-icon svg {
+      width: 14px;
+      height: 14px;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+    }
+
+    .icon-title { background: var(--accent-dim); }
+    .icon-title svg { stroke: var(--accent); }
+
+    .icon-desc { background: var(--green-dim); }
+    .icon-desc svg { stroke: var(--green); }
+
+    .icon-url { background: var(--amber-dim); }
+    .icon-url svg { stroke: var(--amber); }
+
+    .row-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .row-label {
+      font-size: 10.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: var(--text-tertiary);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 3px;
+    }
+
+    .row-value {
+      font-size: 12.5px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      word-break: break-word;
+      white-space: normal;
+    }
+
+    .row-value.url-value {
+      font-family: 'Geist Mono', monospace;
+      font-size: 11px;
+      color: var(--text-tertiary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ─── Status Badges ─── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 500;
+      padding: 2px 7px;
+      border-radius: 20px;
+      font-family: 'Geist Mono', monospace;
+      letter-spacing: 0.2px;
+    }
+
+    .badge-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+    }
+
+    .badge-good { background: var(--green-dim); color: var(--green); }
+    .badge-good .badge-dot { background: var(--green); }
+
+    .badge-warn { background: var(--amber-dim); color: var(--amber); }
+    .badge-warn .badge-dot { background: var(--amber); }
+
+    .badge-miss { background: var(--red-dim); color: var(--red); }
+    .badge-miss .badge-dot { background: var(--red); }
+
+    /* ─── Headings Section ─── */
+    .headings-section {
+      padding: 12px 20px 4px;
+      border-top: 1px solid var(--border);
+    }
+
+    .headings-header {
+      font-size: 10.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: var(--text-tertiary);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .headings-list {
+      max-height: 140px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    .headings-list::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .headings-list::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .headings-list::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 2px;
+    }
+
+    .heading-item {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      padding: 4.5px 0;
+      border-bottom: 1px solid transparent;
+      transition: background 0.1s;
+    }
+
+    .heading-item:last-child {
+      border-bottom: none;
+    }
+
+    .heading-tag {
+      flex-shrink: 0;
+      font-family: 'Geist Mono', monospace;
+      font-size: 9px;
+      font-weight: 500;
+      width: 22px;
+      text-align: center;
+      padding: 2px 0;
+      border-radius: 3px;
+    }
+
+    .tag-h1 { background: var(--accent-dim); color: var(--accent); }
+    .tag-h2 { background: var(--green-dim); color: var(--green); }
+    .tag-h3 { background: var(--amber-dim); color: var(--amber); }
+    .tag-h4, .tag-h5, .tag-h6 { background: var(--red-dim); color: var(--red); }
+
+    .heading-text {
+      font-size: 12px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.4;
+    }
+
+    .heading-item.is-h1 .heading-text {
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+
+    /* ─── Analyze Button ─── */
+    .button-wrap {
+      padding: 14px 20px 16px;
+    }
+
+    .btn-analyze {
+      width: 100%;
+      padding: 11px 16px;
+      border: none;
+      border-radius: 8px;
+      background: var(--accent);
+      color: white;
+      font-family: 'Geist', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+      box-shadow: 0 2px 12px rgba(108, 99, 255, 0.3);
+    }
+
+    .btn-analyze:hover {
+      background: #5b53e0;
+      box-shadow: 0 4px 16px rgba(108, 99, 255, 0.4);
+    }
+
+    .btn-analyze:active {
+      transform: scale(0.97);
+    }
+
+    .btn-analyze svg {
+      width: 14px;
+      height: 14px;
+      stroke: white;
+      fill: none;
+      stroke-width: 2.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* ─── Loading State ─── */
+    .loading-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: var(--bg);
+      z-index: 10;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      padding: 40px 20px;
+    }
+
+    .loading-overlay.active {
+      display: flex;
+    }
+
+    .spinner {
+      width: 28px;
+      height: 28px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      font-weight: 500;
+    }
+
+    /* ─── Error State ─── */
+    .error-box {
+      display: none;
+      margin: 12px 20px;
+      background: var(--red-dim);
+      border: 1px solid rgba(248, 113, 113, 0.2);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 11.5px;
+      color: var(--red);
+      line-height: 1.4;
+    }
+
+    .error-box.active {
+      display: block;
+    }
+
+    /* ─── Wrapper ─── */
+    .popup-wrapper {
+      position: relative;
+      min-height: 100px;
+    }
+  </style>
+</head>
+<body>
+  <div class="popup-wrapper">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <div class="logo">
+          <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        </div>
+        <div>
+          <div class="header-title">Content LLM Analyzer</div>
+          <div class="header-sub">Page metadata preview</div>
+        </div>
+      </div>
+      <div class="heading-count-badge" id="headingCount">—</div>
+    </div>
+
+    <!-- Meta Rows -->
+    <div class="rows" id="metaRows">
+      <!-- Title -->
+      <div class="row">
+        <div class="row-icon icon-title">
+          <svg viewBox="0 0 24 24"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="7" x2="12" y2="20"/></svg>
+        </div>
+        <div class="row-body">
+          <div class="row-label">
+            Title
+            <span class="badge badge-good" id="titleBadge"><span class="badge-dot"></span><span id="titleBadgeText">—</span></span>
+          </div>
+          <div class="row-value" id="titleValue">—</div>
+        </div>
+      </div>
+
+      <!-- Description -->
+      <div class="row">
+        <div class="row-icon icon-desc">
+          <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="15" y2="18"/></svg>
+        </div>
+        <div class="row-body">
+          <div class="row-label">
+            Description
+            <span class="badge badge-good" id="descBadge"><span class="badge-dot"></span><span id="descBadgeText">—</span></span>
+          </div>
+          <div class="row-value" id="descValue">—</div>
+        </div>
+      </div>
+
+      <!-- URL -->
+      <div class="row">
+        <div class="row-icon icon-url">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        </div>
+        <div class="row-body">
+          <div class="row-label">URL</div>
+          <div class="row-value url-value" id="urlValue">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Headings -->
+    <div class="headings-section">
+      <div class="headings-header">
+        Headings
+        <span class="badge badge-good" id="headingsBadge"><span class="badge-dot"></span><span id="headingsBadgeText">—</span></span>
+      </div>
+      <div class="headings-list" id="headingsList">
+      </div>
+    </div>
+
+    <!-- Analyze Button -->
+    <div class="button-wrap">
+      <button class="btn-analyze" id="analyzeBtn">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Analyze Content
+      </button>
+    </div>
+
+    <!-- Error -->
+    <div class="error-box" id="errorBox"></div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+      <div class="spinner"></div>
+      <div class="loading-text">Opening analyzer...</div>
+    </div>
+
+  </div>
+
+  <script src="popup.js"></script>
+</body>
 </html>

@@ -255,7 +255,11 @@ const GOOGLE_CATEGORIES = [
 export default function ContentAnalyzer() {
   const [url, setUrl] = useState('');
   const [manualContent, setManualContent] = useState('');
-  const [useManualInput, setUseManualInput] = useState(true); // Changed to true - paste mode is default
+  const [useManualInput, setUseManualInput] = useState(() => {
+    // If opened from extension, start in URL mode immediately
+    const params = new URLSearchParams(window.location.search);
+    return params.get("source") !== 'extension';
+  });
   const [intendedPrimary, setIntendedPrimary] = useState('');
   const [intendedSecondary, setIntendedSecondary] = useState('');
   const [googleApiKey, setGoogleApiKey] = useState('');
@@ -278,17 +282,24 @@ const fetchWithTimeout = (resource, options = {}, timeoutMs = 20000) =>
     const source = params.get("source");
     const incomingUrl = params.get("url");
     
-    // Check if data came from Chrome extension
     if (source === 'extension') {
-      console.log('Detected extension source, checking for stored data...');
+      console.log('Detected extension source, polling for data...');
       
-      // Check localStorage first (might already be there)
-      const checkLocalStorage = () => {
+      let found = false;
+      let attempts = 0;
+      const maxAttempts = 20; // 20 × 300ms = 6 seconds max wait
+      
+      const poll = () => {
+        if (found) return;
+        
         const stored = localStorage.getItem('clmExtensionData');
         if (stored) {
           try {
             const extracted = JSON.parse(stored);
-            console.log('✅ Loaded extension data from localStorage:', {
+            found = true;
+            localStorage.removeItem('clmExtensionData');
+            
+            console.log('✅ Loaded extension data:', {
               headings: extracted.headings?.length,
               title: extracted.title
             });
@@ -300,36 +311,26 @@ const fetchWithTimeout = (resource, options = {}, timeoutMs = 20000) =>
               text: extracted.text || "",
               source: 'extension'
             });
-            
             setUrl(extracted.url || '');
             setUseManualInput(false);
-            
-            // Clear after loading
-            localStorage.removeItem('clmExtensionData');
           } catch (e) {
             console.error('Failed to parse extension data:', e);
           }
+          return;
+        }
+        
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 300);
+        } else {
+          console.warn('Extension data not found after 6s timeout');
         }
       };
       
-      // Check immediately
-      checkLocalStorage();
+      // Start polling immediately
+      poll();
       
-      // Also listen for storage events (in case data arrives after page load)
-      const handleStorage = () => {
-        checkLocalStorage();
-      };
-      window.addEventListener('storage', handleStorage);
-      
-      // Check again after a short delay (in case extension is still injecting)
-      setTimeout(checkLocalStorage, 500);
-      setTimeout(checkLocalStorage, 1500);
-      
-      return () => {
-        window.removeEventListener('storage', handleStorage);
-      };
     } else if (incomingUrl) {
-      // Regular URL (no extension data)
       setUrl(incomingUrl);
       setUseManualInput(false);
     }

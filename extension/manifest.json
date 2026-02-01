@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Content LLM Analyzer",
-  "version": "1.0",
+  "version": "2.0",
   "description": "Extract page content and analyze with LLM",
   "permissions": [
     "activeTab",
@@ -15,6 +15,7 @@
     "service_worker": "background.js"
   },
   "action": {
+    "default_popup": "popup.html",
     "default_title": "Analyze this page with Content LLM Analyzer"
   }
 }
