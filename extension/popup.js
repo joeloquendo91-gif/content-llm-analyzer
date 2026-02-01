@@ -129,83 +129,24 @@ document.getElementById('analyzeBtn').addEventListener('click', async () => {
   document.getElementById('loadingOverlay').classList.add('active');
 
   try {
-    const appUrl = 'https://content-llm-analyzer.vercel.app?source=extension';
-    const newTab = await chrome.tabs.create({ url: appUrl });
-
-    // Keep trying to inject until the app confirms it read the data
-    let injected = false;
-    let attempts = 0;
-    const maxAttempts = 30; // 30 × 200ms = 6 seconds
-
-    const tryInject = () => {
-      if (injected || attempts >= maxAttempts) return;
-      attempts++;
-
-      chrome.scripting.executeScript({
-        target: { tabId: newTab.id },
-        func: (d) => {
-          // Write data
-          localStorage.setItem('clmExtensionData', JSON.stringify(d));
-          // Check if app already consumed it (it removes the key after reading)
-          // Return whether the key is still there — if yes, app hasn't read it yet
-          return !!localStorage.getItem('clmExtensionData');
-        },
-        args: [extractedData]
-      }, (results) => {
-        if (chrome.runtime.lastError) {
-          // Page not ready yet, retry
-          setTimeout(tryInject, 200);
-          return;
-        }
-
-        const keyStillThere = results?.[0]?.result;
-
-        if (keyStillThere) {
-          // Data written, now poll to see if the app consumed it
-          pollForConsumption();
-        } else {
-          // Key already gone — app already read and removed it
-          injected = true;
-          window.close();
-        }
-      });
+    // Build a payload that only includes what the app needs for display/analysis
+    // Strip the full page text to keep URL short — app will re-fetch if needed
+    const payload = {
+      url: extractedData.url,
+      title: extractedData.title,
+      description: extractedData.description,
+      headings: extractedData.headings,
+      introduction: extractedData.introduction
     };
 
-    // Poll to check if app has consumed (removed) the localStorage key
-    const pollForConsumption = () => {
-      chrome.scripting.executeScript({
-        target: { tabId: newTab.id },
-        func: () => {
-          return !!localStorage.getItem('clmExtensionData');
-        }
-      }, (results) => {
-        if (chrome.runtime.lastError) {
-          // Tab might have navigated, just close
-          window.close();
-          return;
-        }
+    // Compress: JSON → base64
+    const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
 
-        const keyStillThere = results?.[0]?.result;
+    const appUrl = `https://content-llm-analyzer.vercel.app?source=extension&data=${encoded}`;
+    chrome.tabs.create({ url: appUrl });
 
-        if (!keyStillThere) {
-          // App consumed the data — safe to close
-          injected = true;
-          window.close();
-        } else {
-          // Still there, keep polling
-          attempts++;
-          if (attempts < maxAttempts) {
-            setTimeout(pollForConsumption, 200);
-          } else {
-            // Timeout — close anyway, data is in localStorage
-            window.close();
-          }
-        }
-      });
-    };
-
-    // Start injection attempts
-    setTimeout(tryInject, 500); // Small delay for tab to start loading
+    // Close popup after a short delay to let the tab open
+    setTimeout(() => window.close(), 300);
 
   } catch (err) {
     document.getElementById('loadingOverlay').classList.remove('active');
