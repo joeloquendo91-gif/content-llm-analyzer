@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy - Content LLM Analyzer</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      line-height: 1.6;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 0 20px;
+      color: #333;
+    }
+    h1 { color: #6c63ff; }
+    h2 { color: #555; margin-top: 30px; }
+    .updated { color: #888; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h1>Privacy Policy for Content LLM Analyzer</h1>
+  <p class="updated">Last updated: February 1, 2026</p>
+
+  <h2>Overview</h2>
+  <p>Content LLM Analyzer is a Chrome extension that helps you analyze how search engines and AI systems interpret your web content. This privacy policy explains what data we collect, how we use it, and your rights.</p>
+
+  <h2>Data Collection</h2>
+  <p>The extension collects the following data <strong>only when you explicitly click the extension icon</strong>:</p>
+  <ul>
+    <li>Page title</li>
+    <li>Meta description</li>
+    <li>Page URL</li>
+    <li>Heading structure (H1-H6 tags)</li>
+    <li>Page text content (up to 20,000 characters)</li>
+    <li>Introduction/excerpt (first ~150 words)</li>
+  </ul>
+  <p><strong>The extension does NOT:</strong></p>
+  <ul>
+    <li>Track your browsing history</li>
+    <li>Collect data automatically or in the background</li>
+    <li>Access pages unless you activate the extension</li>
+    <li>Collect personal information (name, email, etc.)</li>
+  </ul>
+
+  <h2>How We Use Your Data</h2>
+  <p>Extracted content is sent to our analysis API (content-llm-analyzer.vercel.app) where it is:</p>
+  <ul>
+    <li>Processed using Google Cloud Natural Language API for category detection</li>
+    <li>Analyzed using Anthropic Claude API for content clarity recommendations</li>
+    <li><strong>Not stored permanently</strong> - data is processed in memory and discarded</li>
+    <li>Not shared with third parties beyond the AI service providers (Google, Anthropic)</li>
+    <li>Not used for training AI models</li>
+  </ul>
+
+  <h2>Third-Party Services</h2>
+  <p>We use the following third-party services to analyze content:</p>
+  <ul>
+    <li><strong>Google Cloud Natural Language API</strong> - for content categorization (see <a href="https://cloud.google.com/terms/cloud-privacy-notice">Google's Privacy Policy</a>)</li>
+    <li><strong>Anthropic Claude API</strong> - for content analysis (see <a href="https://www.anthropic.com/privacy">Anthropic's Privacy Policy</a>)</li>
+  </ul>
+
+  <h2>Local Storage</h2>
+  <p>The extension uses Chrome's local storage to:</p>
+  <ul>
+    <li>Temporarily pass extracted data to the analysis application</li>
+    <li>Store your optional API key preferences (if you choose to provide your own Google/Anthropic keys)</li>
+  </ul>
+  <p>All data stored locally remains on your device and is not transmitted anywhere except when you explicitly run an analysis.</p>
+
+  <h2>Permissions Explained</h2>
+  <ul>
+    <li><strong>activeTab</strong> - Read page content when you click the extension icon</li>
+    <li><strong>scripting</strong> - Extract structured content from pages (including JavaScript-rendered content)</li>
+    <li><strong>storage</strong> - Store API key preferences locally on your device</li>
+  </ul>
+
+  <h2>Your Control</h2>
+  <p>You have complete control:</p>
+  <ul>
+    <li>The extension only runs when <strong>you click the icon</strong></li>
+    <li>You choose which pages to analyze</li>
+    <li>You can uninstall the extension at any time</li>
+    <li>Uninstalling removes all locally stored preferences</li>
+  </ul>
+
+  <h2>Data Retention</h2>
+  <p>We do not retain your content data. Analyzed content is processed in real-time and immediately discarded after analysis results are returned to you.</p>
+
+  <h2>Children's Privacy</h2>
+  <p>Our extension is not intended for children under 13. We do not knowingly collect data from children.</p>
+
+  <h2>Changes to This Policy</h2>
+  <p>We may update this privacy policy from time to time. The "Last updated" date at the top will reflect any changes. Continued use of the extension after changes constitutes acceptance of the updated policy.</p>
+
+  <h2>Contact</h2>
+  <p>For questions or concerns about this privacy policy, please contact us at:</p>
+  <p><strong>Email:</strong> [joel.oquendo91@gmail.com]</p>
+
+  <hr style="margin: 40px 0; border: none; border-top: 1px solid #ddd;">
+  <p style="text-align: center; color: #888; font-size: 14px;">
+    <a href="https://content-llm-analyzer.vercel.app" style="color: #6c63ff;">Content LLM Analyzer</a> | 
+    <a href="/" style="color: #6c63ff;">Back to App</a>
+  </p>
+</body>
+</html>
