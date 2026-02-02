@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Content LLM Analyzer",
-  "version": "2.0",
+  "version": "1.0",
   "description": "Extract page content and analyze with LLM",
   "permissions": [
     "activeTab",
@@ -16,6 +16,16 @@
   },
   "action": {
     "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon-16.png",
+      "48": "icon-48.png",
+      "128": "icon-128.png"
+    },
     "default_title": "Analyze this page with Content LLM Analyzer"
+  },
+  "icons": {
+    "16": "icon-16.png",
+    "48": "icon-48.png",
+    "128": "icon-128.png"
   }
 }
