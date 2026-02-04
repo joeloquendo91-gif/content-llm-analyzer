@@ -504,6 +504,48 @@ const parseContentClarityExplanation = (explanation) => {
     }
   };
 
+  const analyzeSentimentWithGoogleNLP = async (content) => {
+    // If user provided their own API key, use it directly
+    if (googleApiKey && googleApiKey.trim()) {
+      const response = await fetch(
+        `https://language.googleapis.com/v1/documents:analyzeSentiment?key=${googleApiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            document: { type: 'PLAIN_TEXT', content: content.slice(0, 20000) }
+          })
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Sentiment API error');
+      }
+
+      const data = await response.json();
+      
+      return {
+        documentSentiment: data.documentSentiment,
+        sentences: data.sentences || []
+      };
+    } else {
+      // Use backend API (with backend's Google key)
+      const response = await fetch('/api/google-sentiment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: content.slice(0, 20000) })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Sentiment API error');
+      }
+
+      return await response.json();
+    }
+  };
+
   const analyzeWithClaude = async (content, nlpResults, extraction) => {
   // ---- STRUCTURE FROM EXTRACTION (SOURCE OF TRUTH) ----
 
@@ -753,11 +795,6 @@ CategoryMatchStatus rules:
 };
 
   const handleAnalyze = async () => {
-    // Debug logging
-    console.log('Debug - handleAnalyze called');
-    console.log('Debug - useManualInput:', useManualInput);
-    console.log('Debug - url:', url);
-    console.log('Debug - manualContent:', manualContent ? `${manualContent.substring(0, 50)}...` : 'empty');
     
     // Validate based on mode
     if (useManualInput) {
@@ -801,7 +838,6 @@ if (useManualInput && manualContent) {
   } else {
     contentText = extensionData.text;
   }
-  console.log('Debug - contentText length:', contentText?.length, 'first 100:', contentText?.slice(0, 100));
 } else if (url) {
   extraction = await fetchUrlContent(url);
   contentText = extraction.text;
@@ -814,11 +850,13 @@ if (useManualInput && manualContent) {
 }
 
 const nlpResults = await analyzeWithGoogleNLP(contentText);
+const sentimentResults = await analyzeSentimentWithGoogleNLP(contentText);
 const claudeResults = await analyzeWithClaude(contentText, nlpResults, extraction);
 
 setResults({
   extraction,  // <-- new
   nlp: nlpResults,
+  sentiment: sentimentResults,
   claude: claudeResults,
 });
     } catch (err) {
@@ -1194,6 +1232,60 @@ setResults({
         </div>
       )}
     </div>
+
+    {/* Sentiment Analysis */}
+    {results?.sentiment && (
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <h2 className="text-xl font-bold text-gray-800 mb-4">Content Sentiment</h2>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div className="p-4 bg-blue-50 rounded-lg">
+            <div className="text-sm text-gray-600 mb-1">Overall Sentiment</div>
+            <div className="flex items-center gap-3">
+              <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                results.sentiment.documentSentiment.score >= 0.25 ? 'bg-green-500' :
+                results.sentiment.documentSentiment.score <= -0.25 ? 'bg-red-500' :
+                'bg-gray-400'
+              }`}></div>
+              <div>
+                <div className="text-2xl font-bold text-gray-800">
+                  {results.sentiment.documentSentiment.score >= 0.25 ? 'Positive' :
+                   results.sentiment.documentSentiment.score <= -0.25 ? 'Negative' :
+                   'Neutral'}
+                </div>
+                <div className="text-sm text-gray-600">
+                  Score: <span className="font-semibold">{results.sentiment.documentSentiment.score.toFixed(2)}</span>
+                  <span className="text-xs ml-1">(Range: -1.0 to 1.0)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 bg-purple-50 rounded-lg">
+            <div className="text-sm text-gray-600 mb-1">Emotional Intensity</div>
+            <div className="text-2xl font-bold text-gray-800">
+              {results.sentiment.documentSentiment.magnitude.toFixed(1)}
+            </div>
+            <div className="text-sm text-gray-600 mt-2">
+              {results.sentiment.documentSentiment.magnitude < 1 ? 'Very Low' :
+               results.sentiment.documentSentiment.magnitude < 3 ? 'Low' :
+               results.sentiment.documentSentiment.magnitude < 5 ? 'Moderate' :
+               results.sentiment.documentSentiment.magnitude < 8 ? 'High' : 'Very High'}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-700">
+          <strong className="text-gray-800">What this means:</strong>
+          <ul className="list-disc ml-5 mt-2 space-y-1">
+            <li><strong>Score:</strong> Ranges from -1.0 (very negative) to 1.0 (very positive). Neutral content scores near 0.0</li>
+            <li><strong>Magnitude:</strong> Measures how much emotional content exists (0+ scale). Higher values indicate stronger emotional language</li>
+            <li>Neutral, factual content (like documentation) typically has low magnitude (0-2)</li>
+            <li>Opinionated content (like reviews or testimonials) has high magnitude (3+)</li>
+          </ul>
+        </div>
+      </div>
+    )}
 
     {/* Content Clarity Analysis */}
     <div className="bg-white rounded-xl shadow-lg p-6">
