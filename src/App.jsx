@@ -546,225 +546,134 @@ const parseContentClarityExplanation = (explanation) => {
     }
   };
 
-  const analyzeWithClaude = async (content, nlpResults, extraction) => {
-  // ---- STRUCTURE FROM EXTRACTION (SOURCE OF TRUTH) ----
-
+const analyzeWithClaude = async (content, nlpResults, extraction) => {
   const title = extraction?.title || "(No title detected)";
   const introduction = extraction?.introduction || "(No introduction detected)";
   const headings = extraction?.headings || [];
 
-  const outline = headings.length
-    ? headings
-        .slice(0, 40) // safety cap
-        .map(
-          (h, i) => `${i + 1}. ${h.level.toUpperCase()}: ${h.text}`
-        )
-        .join("\n")
-    : "No headings extracted.";
+  // Build sections by slicing content around heading text
+  const buildSections = (headings, fullText) => {
+    if (!headings.length) return [];
+    const sections = [];
+    for (let i = 0; i < headings.length; i++) {
+      const headingText = headings[i].text;
+      const nextHeadingText = headings[i + 1]?.text;
+      const start = fullText.indexOf(headingText);
+      const end = nextHeadingText ? fullText.indexOf(nextHeadingText) : fullText.length;
+      const sectionContent = start !== -1 ? fullText.slice(start, end !== -1 ? end : fullText.length).slice(0, 1500) : "";
+      sections.push({
+        level: headings[i].level,
+        heading: headingText,
+        content: sectionContent.trim()
+      });
+    }
+    return sections;
+  };
 
-  // ---- CATEGORY CONTEXT ----
+  const sections = buildSections(headings, content);
+
+  const sectionsText = sections.length
+    ? sections.map((s, i) =>
+        `Section ${i + 1} [${s.level.toUpperCase()}]: "${s.heading}"\n${s.content || "(no content extracted)"}`
+      ).join("\n\n---\n\n")
+    : content.slice(0, 25000);
 
   const categoryContext = nlpResults.primaryCategory
-    ? `Detected Category: ${nlpResults.primaryCategory.name} (${(
-        nlpResults.primaryCategory.confidence * 100
-      ).toFixed(1)}%)`
+    ? `Detected: ${nlpResults.primaryCategory.name} (${(nlpResults.primaryCategory.confidence * 100).toFixed(1)}%)`
     : "No Google NLP category detected";
 
-  const intentContext =
-  intendedPrimary || intendedSecondary
-    ? `\nTarget Primary Category: ${intendedPrimary || "(not specified)"}\nTarget Secondary Category: ${intendedSecondary || "(not specified)"}`
+  const intentContext = intendedPrimary || intendedSecondary
+    ? `\nTarget Primary: ${intendedPrimary || "(not specified)"}\nTarget Secondary: ${intendedSecondary || "(not specified)"}`
     : "";
 
-// ---- PROMPT ----
-
-const prompt = `
-You are an expert in content intent interpretation and grounding for AI and search systems.
-Your job is to evaluate how a page is currently interpreted, identify mixed or competing signals,
-and recommend light, non-destructive edits that clarify intent and audience.
+  const prompt = `
+You are an expert in content intent and AI grounding analysis.
+Analyze this page section by section and provide specific, actionable editing recommendations per section.
 
 IMPORTANT:
-- This is NOT an SEO or keyword analysis
-- Do NOT rewrite the page
+- Focus on clarity of intent and audience for each section
+- Suggest minimal, non-destructive edits only
+- Do NOT rewrite content
 - Do NOT change tone or voice
-- Do NOT recommend adding or removing large sections
-- Assume edits will be made by humans; clarity over cleverness
 
-INPUTS
-
+PAGE OVERVIEW
 URL: ${url}
+Title: ${title}
+Introduction: ${introduction}
 
 Google NLP Classification:
 - Primary: ${nlpResults.primaryCategory ? `${nlpResults.primaryCategory.name} (${(nlpResults.primaryCategory.confidence * 100).toFixed(1)}%)` : "None"}
 - Secondary: ${nlpResults.secondaryCategory ? `${nlpResults.secondaryCategory.name} (${(nlpResults.secondaryCategory.confidence * 100).toFixed(1)}%)` : "None"}
-- Clarity gap: ${(nlpResults.clarityGap * 100).toFixed(1)}%
+- Clarity Gap: ${(nlpResults.clarityGap * 100).toFixed(1)}%
 ${intentContext}
 
-EXTRACTED STRUCTURE (authoritative — do NOT guess headings)
-
-Title:
-${extraction?.title || "(none)"}
-
-Introduction:
-${extraction?.introduction || "(none)"}
-
-Outline:
-${(extraction?.headings || [])
-  .slice(0, 30)
-  .map(h => `${h.level.toUpperCase()}: ${h.text}`)
-  .join("\n") || "(none)"}
-
-CONTENT (truncated):
-${content.slice(0, 25000)}
+SECTIONS TO ANALYZE:
+${sectionsText}
 
 TASKS
 
-A) Current Interpretation Summary
-- In 1–2 sentences, explain how the page is most likely being interpreted today.
-- Describe the dominant intent and any secondary or competing intent.
+For each section, analyze:
+1. Does the heading clearly signal the section's purpose and audience?
+2. Does the content deliver on the heading's promise?
+3. Are there mixed signals (wrong audience, competing topics, vague framing)?
+4. What is the single most impactful edit for this section?
 
-B) Intent Alignment Assessment
-- If target categories are provided, assess alignment against them.
-- If no targets are provided, infer the most likely intended audience and purpose.
-- Classify overall alignment as Aligned, Partially aligned, or Mixed, and explain why.
+Also provide overall page-level analysis:
+A) Current Interpretation Summary (1-2 sentences)
+B) Intent Alignment: Aligned | Partially aligned | Mixed + reason
+C) Top 2-4 Mixed Signals across the whole page
+D) Expected Outcome if edits are applied (1-2 sentences)
 
-C) Top Mixed Signals
-- Identify the top 2–4 elements that weaken clarity.
-- Examples include:
-  - Broad or generic introductions
-  - Headings signaling a different audience
-  - Role- or outcome-focused language instead of purpose or pathway
-  - Section order that delays context
+GROUNDING SCORE (0-100):
+Score based on:
+- Title Clarity (25pts): specifies format +6, audience +6, scope +6, outcome +7
+- Structural Alignment (30pts): (aligned H2s / total H2s) × 30
+- Introduction Anchoring (20pts): explicit prerequisites +10, explicit audience +10
+- Content Verification (15pts): title topics appear as H2s +8, scope maintained +4, logical hierarchy +3
+- Audience Definition (10pts): lower bound defined +5, upper bound defined +5
 
-D) Suggested Non-Destructive Edits
-- Recommend specific, minimal edits such as:
-  - Intro framing tweaks
-  - Heading renames or reordering
-  - Short bridge or context-setting sentences
-- Do NOT rewrite content.
-- Do NOT change tone.
-- Do NOT add or remove major sections.
+In groundingExplanation: quote exact title, list 3+ H2s, show math, quote intro statements.
 
-D2) Highest-Impact Edit
-- Identify the SINGLE most impactful edit that would improve intent clarity.
-- This should be DIFFERENT from the 6 edits listed above.
-- Focus on the one change that would have the largest impact on search/LLM interpretation.
-- This could be a title change, major heading restructure, or key positioning change.
-- Explain briefly why this edit has exceptional impact.
+CategoryMatchStatus rules:
+- No target provided → "No intent specified"
+- Target primary matches detected → "PRIMARY MATCH"
+- Target primary differs but partially supported → "WRONG PRIORITY"
+- Target primary strongly conflicts → "PRIMARY MISMATCH"
 
-E) Expected Outcome
-- In 1–2 sentences, explain how these changes would improve interpretability and reduce intent competition.
-
-GROUNDING ANALYSIS (MANDATORY EVIDENCE-BASED SCORING):
-
-Your grounding score MUST be based on verifiable evidence from the extracted outline.
-
-Required References in Your Explanation:
-1. Quote the exact title (Note: The H1 heading and document title should be treated as the same for analysis - don't make separate recommendations for both)
-2. List at least 3 specific H2 headings from the outline
-3. Quote any explicit prerequisite or audience statements from the introduction
-4. Cite specific numbers (heading counts, percentages, etc.)
-
-Scoring Criteria (Total: 100 points):
-
-Title Clarity (25 points):
-IMPORTANT: The H1 and page title represent the same content promise to users. Do not treat them separately or recommend changes to both - they should align and be analyzed as one element.
-
-- Does it specify format? (tutorial, guide, reference, documentation, etc.) +6
-- Does it specify audience? (beginner, developer, designer, intermediate, etc.) +6
-- Does it specify scope? (specific topics, tools, technologies covered) +6
-- Does it promise outcome? (learn to build X, master Y, understand Z, etc.) +7
-Award points for each element clearly present in the title.
-
-Structural Alignment (30 points):
-- Count how many H2 headings directly relate to title promises
-- Formula: (Aligned H2s / Total H2s) × 30
-- Generic headings like "Introduction", "Overview", "Conclusion" count as 0.5× aligned
-- Specific headings that match title topics count as 1× aligned
-Example: Title promises "useState and useEffect" → both must appear as H2s for full points
-
-Introduction Anchoring (20 points):
-- Explicit prerequisites stated: +10 points (quote them)
-- Explicit audience/skill level stated: +10 points (quote it)
-- If only implied (not stated): award 5 points each
-Example: "Requires React 16.8+" is explicit. "If you know React..." is implied.
-
-Content Verification (15 points):
-- Do all title-promised topics appear as H2s? +8 points
-- Is scope maintained (no unrelated sections)? +4 points
-- Is heading hierarchy logical (H2 → H3 progression)? +3 points
-
-Audience Definition (10 points):
-- Lower bound defined (prerequisites/prior knowledge stated): +5 points
-- Upper bound defined (what's NOT covered or beyond scope): +5 points
-
-CRITICAL REQUIREMENTS FOR YOUR EXPLANATION:
-✓ Start by quoting the exact title (in quotes)
-✓ List at least 3 specific H2 headings
-✓ Show your math: "4 of 6 H2s aligned = 67% = 20 points"
-✓ Quote explicit statements when present: "Introduction states 'requires X'"
-✓ Identify specific weaknesses with evidence
-✓ Make it verifiable from the outline alone
-
-GOOD EXAMPLE:
-"Score: 82/100. Title 'React Hooks Tutorial: Complete Beginner's Guide' specifies format (tutorial +6) and audience (beginner +6) but promises 'complete' coverage while only addressing 2 hooks (scope clarity +3/6). The 6 H2s are: 'Introduction', 'What are Hooks?', 'useState Hook', 'useEffect Hook', 'Common Mistakes', 'Next Steps'. Four H2s directly support hooks topic (67% alignment = 20/30pts). Introduction states 'assumes basic React knowledge' (explicit prerequisite +10pts) but doesn't define upper bound (no 'will NOT cover' statement, +0/5pts). Generic 'Introduction' H2 reduces specificity (-2pts)."
-
-BAD EXAMPLE:
-"Score: 85/100. The content is well-organized with clear structure that supports the main topic. Good progression and logical flow."
-(No evidence, no specifics, not verifiable)
-
-VERIFICATION CHECKLIST (complete before finalizing):
-□ Did I quote the exact title?
-□ Did I list at least 3 specific H2 headings?
-□ Did I cite explicit statements from introduction?
-□ Did I show my math for the score calculation?
-□ Is my explanation verifiable from the outline alone?
-
-Return JSON ONLY (no markdown). Use exactly this schema:
+Return JSON ONLY (no markdown):
 
 {
   "categoryMatchStatus": "PRIMARY MATCH|WRONG PRIORITY|PRIMARY MISMATCH|No intent specified",
   "groundingScore": 0-100,
-  "groundingExplanation": "MUST reference: (1) exact title in quotes, (2) at least 3 specific H2 headings, (3) any explicit prerequisite/audience statements, (4) show score calculation math. Example: 'Title \"X\" specifies format (+6) and audience (+6). H2s \"A\", \"B\", \"C\" directly support (3 of 5 = 60% = 18/30pts). Introduction states \"requires Y\" (+10pts). Score: 78/100'",
-  "currentInterpretationSummary": "A. 1–2 sentences",
+  "groundingExplanation": "Quote title, list 3+ H2s, show score math",
+  "currentInterpretationSummary": "1-2 sentences",
   "intentAlignmentAssessment": {
     "status": "Aligned|Partially aligned|Mixed",
-    "reason": "B. 1–3 sentences"
+    "reason": "1-3 sentences"
   },
-  "topMixedSignals": [
-    "C. Signal 1",
-    "C. Signal 2",
-    "C. Signal 3 (optional)",
-    "C. Signal 4 (optional)"
-  ],
-  "suggestedEdits": [
-  // MUST contain exactly 6 items
+  "topMixedSignals": ["signal 1", "signal 2", "signal 3"],
+  "sectionAnalysis": [
     {
-      "location": "D. Where on page (e.g., Intro paragraph, H1, H2: '...')",
-      "change": "D. The minimal edit",
-      "reason": "D. Why this improves interpretability for AI/search"
+      "heading": "exact heading text",
+      "level": "h1|h2|h3",
+      "mixedSignals": ["any mixed signals, or empty array"],
+      "suggestedEdits": [
+        {
+          "location": "where exactly (e.g. heading text, opening sentence)",
+          "change": "the minimal edit",
+          "reason": "why this improves intent clarity for AI/search"
+        }
+      ]
     }
   ],
-  "highestImpactEdit": {
-    "location": "D2. Where on page (MUST be different from the 6 edits above)",
-    "change": "D2. The single highest-impact edit (e.g., major title rewrite, key H1 change)",
-    "reason": "D2. Why this specific edit has exceptional impact compared to all others"
-  },
-  "expectedOutcome": "E. 1–2 sentences"
+  "expectedOutcome": "1-2 sentences"
 }
 
-RULES (MANDATORY):
-- suggestedEdits MUST contain exactly 6 items.
-- highestImpactEdit MUST be DIFFERENT from all 6 suggestedEdits.
-- highestImpactEdit should target the highest-leverage change (often the H1 or main title).
-- highestImpactEdit should be a bigger, more impactful change than the other 6.
-- Do NOT invent new sections or rewrite content.
-- Prefer micro-edits for suggestedEdits; save major edits for highestImpactEdit.
-
-CategoryMatchStatus rules:
-- If no target primary/secondary provided: "No intent specified"
-- If target primary matches detected primary: "PRIMARY MATCH"
-- If target primary differs but page still supports it partially: "WRONG PRIORITY"
-- If target primary strongly conflicts with detected primary: "PRIMARY MISMATCH"
+RULES:
+- sectionAnalysis must include every section provided
+- suggestedEdits per section: 1-3 specific edits only (skip if section is clear)
+- mixedSignals: only flag real issues, leave empty array if section is clear
+- Never invent sections not in the outline
 `;
 
   // ---- API CALL ----
@@ -781,16 +690,9 @@ CategoryMatchStatus rules:
   }
 
   const data = await response.json();
-
-  // ---- PARSE JSON SAFELY ----
-
   const text = data.content?.find((c) => c.type === "text")?.text || "";
   const jsonMatch = text.match(/\{[\s\S]*\}/);
-
-  if (!jsonMatch) {
-    throw new Error("Claude response did not return valid JSON");
-  }
-
+  if (!jsonMatch) throw new Error("Claude response did not return valid JSON");
   return JSON.parse(jsonMatch[0]);
 };
 
@@ -1393,7 +1295,75 @@ setResults({
         </div>
       )}
     </div>
+{/* Section-by-Section Analysis */}
+{results?.claude?.sectionAnalysis?.length > 0 && (
+  <div className="bg-white rounded-xl shadow-lg p-6">
+    <h2 className="text-xl font-bold text-gray-800 mb-2">Section-by-Section Analysis</h2>
+    <p className="text-sm text-gray-600 mb-4">
+      Expand each section to see specific editing recommendations
+    </p>
+    <div className="space-y-2">
+      {results.claude.sectionAnalysis.map((section, idx) => {
+        const hasIssues = section.mixedSignals?.length > 0 || section.suggestedEdits?.length > 0;
+        return (
+          <details key={idx} className="border rounded-lg overflow-hidden">
+            <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 list-none">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded" style={{
+                  background: section.level === 'h1' ? 'rgba(108,99,255,0.1)' : section.level === 'h2' ? 'rgba(52,211,153,0.1)' : 'rgba(251,191,36,0.1)',
+                  color: section.level === 'h1' ? '#6c63ff' : section.level === 'h2' ? '#059669' : '#d97706'
+                }}>
+                  {section.level?.toUpperCase()}
+                </span>
+                <span className="font-medium text-gray-800 text-sm">{section.heading}</span>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                {hasIssues
+                  ? <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">{section.suggestedEdits?.length || 0} edit{section.suggestedEdits?.length !== 1 ? 's' : ''}</span>
+                  : <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">✓ Clear</span>
+                }
+                <span className="text-gray-400 text-sm">▼</span>
+              </div>
+            </summary>
 
+            <div className="px-4 pb-4 border-t bg-gray-50">
+              {section.mixedSignals?.length > 0 && (
+                <div className="mt-3">
+                  <div className="text-xs font-semibold text-yellow-800 uppercase tracking-wide mb-2">Mixed Signals</div>
+                  <ul className="space-y-1">
+                    {section.mixedSignals.map((signal, i) => (
+                      <li key={i} className="text-sm text-gray-700 flex gap-2">
+                        <span className="text-yellow-500 flex-shrink-0">⚠</span>
+                        <span>{signal}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {section.suggestedEdits?.length > 0 ? (
+                <div className="mt-3 space-y-2">
+                  <div className="text-xs font-semibold text-green-800 uppercase tracking-wide mb-2">Suggested Edits</div>
+                  {section.suggestedEdits.map((edit, i) => (
+                    <div key={i} className="bg-white border border-green-200 rounded-lg p-3 text-sm">
+                      <div><span className="font-semibold text-gray-700">Location:</span> {edit.location}</div>
+                      <div className="mt-1"><span className="font-semibold text-gray-700">Change:</span> {edit.change}</div>
+                      <div className="mt-1"><span className="font-semibold text-gray-700">Reason:</span> {edit.reason}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-3 text-sm text-green-700">
+                  ✓ This section has clear intent and no suggested edits.
+                </div>
+              )}
+            </div>
+          </details>
+        );
+      })}
+    </div>
+  </div>
+)}
     {/* Intent & Clarity Recommendations (A–E) */}
     {results?.claude && (
   <div className="bg-white rounded-xl shadow-lg p-6">
