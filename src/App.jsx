@@ -699,7 +699,7 @@ function CategoryPicker({ value, onChange, label, placeholder = '— Optional �
 }
 
 const STYLES = `
-  @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap');
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
   :root{
     --cream:#faf9f6;--white:#ffffff;--ink:#1a1a18;--ink2:#3d3d38;
@@ -707,9 +707,9 @@ const STYLES = `
     --olive:#5a6b2a;--olive-lt:#f0f3e8;--olive-md:#dce5c4;
     --amber:#b8650f;--amber-lt:#fdf3e3;
     --red:#b83224;--red-lt:#fdf0ee;
-    --serif:'Instrument Serif',Georgia,serif;
-    --sans:'DM Sans',system-ui,sans-serif;
-    --mono:'DM Mono',monospace;
+    --serif:'Libre Baskerville',Georgia,serif;
+    --sans:'Geist',system-ui,sans-serif;
+    --mono:'Geist Mono',monospace;
   }
   body{background:var(--cream);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;font-size:15px;line-height:1.6;}
   /* Nav */
@@ -1319,7 +1319,7 @@ RULES:
                 <div className="rcb">
                   <div style={{ marginBottom: '13px' }}>
                     <div className="flbl">Title</div>
-                    <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)', fontFamily: 'var(--serif)', lineHeight: 1.4 }}>{results.extraction.title || '—'}</div>
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--ink)', fontFamily: 'var(--serif)', lineHeight: 1.4 }}>{results.extraction.title || '—'}</div>
                   </div>
                   {results.extraction.introduction && (
                     <div style={{ marginBottom: '15px' }}>
@@ -1399,7 +1399,7 @@ RULES:
                     <div className="rci" style={{ background: 'var(--olive-lt)' }}><Zap size={15} color="var(--olive)" /></div>
                     <div style={{ flex: 1 }}><div className="rct">Content Clarity Score</div><div className="rcs">65 of 100 points grounded in NLP API data</div></div>
                     <div style={{ textAlign: 'right' }}>
-                      <span style={{ fontFamily: 'var(--mono)', fontSize: '26px', fontWeight: 700, letterSpacing: '-1px', color: sfill(total / 100) }}>{total}</span>
+                      <span style={{ fontFamily: 'var(--serif)', fontSize: '28px', fontWeight: 700, letterSpacing: '-0.5px', color: sfill(total / 100) }}>{total}</span>
                       <span style={{ fontFamily: 'var(--mono)', fontSize: '14px', color: 'var(--muted)' }}>/100</span>
                     </div>
                   </div>
@@ -1475,7 +1475,7 @@ RULES:
                         <div style={{ marginTop: '15px', background: 'var(--cream)', border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden' }}>
                           <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--muted)' }}>Grounding Score (Claude)</div>
-                            <span style={{ fontFamily: 'var(--mono)', fontSize: '16px', fontWeight: 700, color: sfill(results.claude.groundingScore / 100) }}>
+                            <span style={{ fontFamily: 'var(--serif)', fontSize: '18px', fontWeight: 700, color: sfill(results.claude.groundingScore / 100) }}>
                               {results.claude.groundingScore}<span style={{ fontSize: '12px', color: 'var(--muted)', fontWeight: 400 }}>/100</span>
                             </span>
                           </div>
