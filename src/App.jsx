@@ -695,7 +695,52 @@ RULES:
   if (!jsonMatch) throw new Error("Claude response did not return valid JSON");
   return JSON.parse(jsonMatch[0]);
 };
+const calculateApiScores = (nlpResults, extraction) => {
+  // Dimension 1 — Category Confidence (15 points)
+  const confidence = nlpResults.primaryCategory?.confidence || 0;
+  const confidenceScore =
+    confidence >= 0.90 ? 15 :
+    confidence >= 0.75 ? 11 :
+    confidence >= 0.60 ? 7 : 3;
 
+  // Dimension 2 — Clarity Gap (10 points)
+  const gap = nlpResults.clarityGap || 0;
+  const clarityGapScore =
+    gap >= 0.40 ? 10 :
+    gap >= 0.25 ? 7 :
+    gap >= 0.10 ? 4 : 0;
+
+  // Dimension 3 — Title-to-Entity Match (15 points)
+  const titleText = (extraction?.title || "").toLowerCase();
+  const entities = nlpResults.entities || [];
+  const topEntities = entities.slice(0, 5);
+  const titleMatches = topEntities.filter(e =>
+    titleText.includes(e.name.toLowerCase())
+  ).length;
+  const titleEntityScore =
+    titleMatches >= 3 ? 15 :
+    titleMatches === 2 ? 13 :
+    titleMatches === 1 ? 7 : 0;
+
+  // Dimension 4 — Heading-to-Entity Match (15 points)
+  const h2s = (extraction?.headings || []).filter(h => h.level === 'h2');
+  const h2sWithEntity = h2s.filter(h =>
+    topEntities.some(e => h.text.toLowerCase().includes(e.name.toLowerCase()))
+  ).length;
+  const headingEntityScore = h2s.length
+    ? Math.round((h2sWithEntity / h2s.length) *
+        (h2sWithEntity / h2s.length >= 0.75 ? 15 :
+         h2sWithEntity / h2s.length >= 0.50 ? 10 :
+         h2sWithEntity / h2s.length >= 0.25 ? 5 : 0))
+    : 0;
+
+  return {
+    categoryConfidence: { score: confidenceScore, max: 15, confidence: (confidence * 100).toFixed(1) },
+    clarityGap: { score: clarityGapScore, max: 10, gap: (gap * 100).toFixed(1) },
+    titleEntityMatch: { score: titleEntityScore, max: 15, matches: titleMatches, topEntities: topEntities.map(e => e.name) },
+    headingEntityMatch: { score: headingEntityScore, max: 15, matched: h2sWithEntity, total: h2s.length }
+  };
+};
   const handleAnalyze = async () => {
     
     // Validate based on mode
@@ -713,7 +758,12 @@ RULES:
 
     setLoading(true);
     setError('');
-    setResults(null);
+  setResults({
+    extraction,
+    nlp: nlpResults,
+    sentiment: sentimentResults,
+    claude: claudeResults,
+});
 
     try {
       let extraction = null;
@@ -1189,49 +1239,152 @@ setResults({
       </div>
     )}
 
-    {/* Content Clarity Analysis */}
+    {/* Scoring Rubric */}
+{results?.claude && results?.apiScores && (() => {
+  const api = results.apiScores;
+  const dim = results.claude.dimensionScores;
+  const totalScore =
+    (api.categoryConfidence.score || 0) +
+    (api.clarityGap.score || 0) +
+    (api.titleEntityMatch.score || 0) +
+    (api.headingEntityMatch.score || 0) +
+    (dim?.introAudienceSignal?.score || 0) +
+    (dim?.scopeConsistency?.score || 0) +
+    (dim?.contentDelivery?.totalScore || 0);
+
+  const dimensions = [
+    {
+      label: "Category Confidence",
+      source: "NLP API",
+      score: api.categoryConfidence.score,
+      max: 15,
+      detail: `Primary category confidence: ${api.categoryConfidence.confidence}%`,
+      isApi: true
+    },
+    {
+      label: "Clarity Gap",
+      source: "NLP API",
+      score: api.clarityGap.score,
+      max: 10,
+      detail: `Gap between primary and secondary: ${api.clarityGap.gap}%`,
+      isApi: true
+    },
+    {
+      label: "Title-to-Entity Match",
+      source: "NLP API",
+      score: api.titleEntityMatch.score,
+      max: 15,
+      detail: `${api.titleEntityMatch.matches} of top 5 entities appear in title: ${api.titleEntityMatch.topEntities.join(", ")}`,
+      isApi: true
+    },
+    {
+      label: "Heading-to-Entity Match",
+      source: "NLP API",
+      score: api.headingEntityMatch.score,
+      max: 15,
+      detail: `${api.headingEntityMatch.matched} of ${api.headingEntityMatch.total} H2s contain a salient entity`,
+      isApi: true
+    },
+    {
+      label: "Intro Audience Signal",
+      source: "Claude",
+      score: dim?.introAudienceSignal?.score || 0,
+      max: 10,
+      detail: dim?.introAudienceSignal?.evidence || dim?.introAudienceSignal?.reason || "—",
+      isApi: false
+    },
+    {
+      label: "Scope Consistency",
+      source: "Claude",
+      score: dim?.scopeConsistency?.score || 0,
+      max: 10,
+      detail: dim?.scopeConsistency?.reason || "—",
+      isApi: false
+    },
+    {
+      label: "Content Delivery & Claim Grounding",
+      source: "Claude",
+      score: dim?.contentDelivery?.totalScore || 0,
+      max: 25,
+      detail: dim?.contentDelivery?.reason || "—",
+      isApi: false,
+      breakdown: dim?.contentDelivery ? [
+        { label: "Section delivery", score: dim.contentDelivery.sectionDeliveryScore, max: 10 },
+        { label: "Claim support", score: dim.contentDelivery.claimSupportScore, max: 10 },
+        { label: "Ungrounded language", score: dim.contentDelivery.ungroundedLanguageScore, max: 5 }
+      ] : null
+    }
+  ];
+
+  return (
     <div className="bg-white rounded-xl shadow-lg p-6">
-      <h2 className="text-xl font-bold text-gray-800 mb-4">
-        Content Clarity Analysis
-      </h2>
-      <p className="text-sm text-gray-600 mb-4">
-        Measures how clearly your title, headings, and introduction communicate your content's purpose to AI systems
-      </p>
+      <h2 className="text-xl font-bold text-gray-800 mb-1">Content Clarity Score</h2>
+      <p className="text-sm text-gray-500 mb-4">65 of 100 points are grounded in NLP API data</p>
 
-      <div className="mb-4">
-        <div className="flex items-center justify-between mb-2">
-          <span className="font-semibold">Content Clarity Score</span>
-          <span className="text-2xl font-bold text-indigo-600">
-            {results.claude.groundingScore}/100
-          </span>
-        </div>
-
-        <div className="w-full bg-gray-200 rounded-full h-3">
-          <div
-            className={`h-3 rounded-full ${
-              results.claude.groundingScore >= 75
-                ? "bg-green-500"
-                : results.claude.groundingScore >= 50
-                ? "bg-yellow-500"
-                : "bg-red-500"
-            }`}
-            style={{ width: `${results.claude.groundingScore}%` }}
-          />
-        </div>
+      {/* Total */}
+      <div className="flex items-center justify-between mb-2">
+        <span className="font-semibold text-gray-700">Total Score</span>
+        <span className="text-3xl font-bold" style={{ color: '#6c63ff' }}>{totalScore}/100</span>
+      </div>
+      <div className="w-full bg-gray-200 rounded-full h-3 mb-6">
+        <div
+          className={`h-3 rounded-full ${totalScore >= 75 ? 'bg-green-500' : totalScore >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
+          style={{ width: `${totalScore}%` }}
+        />
       </div>
 
-      <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-700">
-        {(() => {
-          const parsed = parseContentClarityExplanation(results.claude.groundingExplanation);
-          
-          if (parsed && parsed.sections.length >= 2) {
-            return (
-              <div className="space-y-4">
-                {/* Score Summary */}
-                <div className="pb-3 border-b border-gray-300">
-                  <span className="font-semibold text-gray-900">Overall Assessment:</span>
-                  <span className="ml-2">Score {parsed.score}/100</span>
-                </div>
+      {/* Dimension breakdown */}
+      <div className="space-y-3">
+        {dimensions.map((d, idx) => (
+          <div key={idx} className="border rounded-lg p-4">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${d.isApi ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                  {d.source}
+                </span>
+                <span className="font-medium text-gray-800 text-sm">{d.label}</span>
+              </div>
+              <span className="font-bold text-gray-800">{d.score}/{d.max}</span>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-1.5 mb-2">
+              <div
+                className={`h-1.5 rounded-full ${d.score / d.max >= 0.75 ? 'bg-green-500' : d.score / d.max >= 0.5 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                style={{ width: `${(d.score / d.max) * 100}%` }}
+              />
+            </div>
+            <p className="text-xs text-gray-600">{d.detail}</p>
+            {d.breakdown && (
+              <div className="mt-2 space-y-1 pl-2 border-l-2 border-gray-200">
+                {d.breakdown.map((b, i) => (
+                  <div key={i} className="flex justify-between text-xs text-gray-500">
+                    <span>{b.label}</span>
+                    <span className="font-semibold">{b.score}/{b.max}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Ungrounded claims */}
+      {dim?.contentDelivery?.ungroundedClaims?.length > 0 && (
+        <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="font-semibold text-red-800 mb-2 text-sm">Ungrounded Claims Found</div>
+          <div className="space-y-2">
+            {dim.contentDelivery.ungroundedClaims.map((c, i) => (
+              <div key={i} className="bg-white border border-red-200 rounded p-3 text-sm">
+                <div className="text-gray-500 text-xs mb-1">{c.section}</div>
+                <div className="italic text-gray-700 mb-1">"{c.quote}"</div>
+                <div className="text-red-700">{c.issue}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+})()}
                 
                 {/* Structured Sections */}
                 <div className="grid gap-3">
