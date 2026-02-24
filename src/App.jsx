@@ -1386,68 +1386,6 @@ setResults({
   );
 })()}
                 
-                {/* Structured Sections */}
-                <div className="grid gap-3">
-                  {parsed.sections.map((section, idx) => (
-                    <div key={idx} className={`p-3 rounded border ${
-                      section.isNegative 
-                        ? 'bg-red-50 border-red-200' 
-                        : 'bg-white border-gray-200'
-                    }`}>
-                      <div className="flex items-start gap-2">
-                        <div className={`flex-shrink-0 w-2 h-2 mt-1.5 rounded-full ${
-                          section.type === 'title' ? 'bg-blue-500' :
-                          section.type === 'headings' ? 'bg-green-500' :
-                          section.type === 'introduction' ? 'bg-purple-500' :
-                          section.type === 'issues' ? 'bg-red-500' :
-                          'bg-orange-500'
-                        }`} />
-                        <div className="flex-1">
-                          <div className={`font-semibold text-xs uppercase tracking-wide mb-1 ${
-                            section.isNegative ? 'text-red-900' : 'text-gray-900'
-                          }`}>
-                            {section.label}
-                          </div>
-                          <div className={`text-sm leading-relaxed ${
-                            section.isNegative ? 'text-red-800' : 'text-gray-700'
-                          }`}>
-                            {section.content}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                
-                {/* Full explanation as expandable */}
-                <details className="mt-3">
-                  <summary className="cursor-pointer text-xs text-gray-500 hover:text-gray-700">
-                    View full analysis
-                  </summary>
-                  <div className="mt-2 text-xs text-gray-600 leading-relaxed">
-                    {results.claude.groundingExplanation}
-                  </div>
-                </details>
-              </div>
-            );
-          }
-          
-          // Fallback: show original if parsing fails
-          return results.claude.groundingExplanation;
-        })()}
-      </div>
-
-      {results.claude.alignmentExplanation && (
-        <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-          <div className="font-semibold text-gray-800 mb-2">
-            Alignment Details
-          </div>
-          <p className="text-sm text-gray-700">
-            {results.claude.alignmentExplanation}
-          </p>
-        </div>
-      )}
-    </div>
 {/* Section-by-Section Analysis */}
 {results?.claude?.sectionAnalysis?.length > 0 && (
   <div className="bg-white rounded-xl shadow-lg p-6">
