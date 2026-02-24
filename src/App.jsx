@@ -522,6 +522,8 @@ function CategoryPicker({ value, onChange, label, placeholder = 'â€” Optional â€
   const ref = useRef(null);
   const searchRef = useRef(null);
 
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 });
+
   useEffect(() => {
     const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener('mousedown', handler);
@@ -529,7 +531,13 @@ function CategoryPicker({ value, onChange, label, placeholder = 'â€” Optional â€
   }, []);
 
   useEffect(() => {
-    if (open && searchRef.current) searchRef.current.focus();
+    if (open) {
+      if (searchRef.current) searchRef.current.focus();
+      if (ref.current) {
+        const r = ref.current.getBoundingClientRect();
+        setDropPos({ top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX, width: r.width });
+      }
+    }
   }, [open]);
 
   const filtered = search.trim()
@@ -575,10 +583,10 @@ function CategoryPicker({ value, onChange, label, placeholder = 'â€” Optional â€
 
       {open && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 5px)', left: 0, right: 0, zIndex: 200,
+          position: 'fixed', top: dropPos.top, left: dropPos.left, width: dropPos.width, zIndex: 9999,
           background: 'var(--white)', border: '1px solid var(--border2)',
           borderRadius: '11px', overflow: 'hidden',
-          boxShadow: '0 4px 24px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.06)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08)',
         }}>
           {/* Search */}
           <div style={{ padding: '10px 10px 8px', borderBottom: '1px solid var(--border)' }}>
@@ -679,7 +687,7 @@ const STYLES = `
     --sans:'DM Sans',system-ui,sans-serif;
     --mono:'DM Mono',monospace;
   }
-  body{background:var(--cream);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;}
+  body{background:var(--cream);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;font-size:15px;line-height:1.6;}
   /* Nav */
   .nav{position:sticky;top:0;z-index:50;background:rgba(250,249,246,0.9);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);padding:0 32px;height:58px;display:flex;align-items:center;justify-content:space-between;}
   .nav-logo{font-family:var(--serif);font-size:19px;color:var(--ink);display:flex;align-items:center;gap:10px;}
@@ -769,9 +777,9 @@ const STYLES = `
   .drn{font-size:13px;font-weight:500;color:var(--ink);}
   .drr{display:flex;align-items:center;gap:9px;flex-shrink:0;}
   .drs{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--ink2);min-width:36px;text-align:right;}
-  .drd{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.55;}
-  .drb{margin-top:7px;padding:7px 11px;background:var(--cream);border-radius:7px;border-left:2px solid var(--border2);}
-  .drbr{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);padding:2px 0;font-family:var(--mono);}
+  .drd{font-size:13px;color:var(--ink2);margin-top:5px;line-height:1.6;}
+  .drb{margin-top:8px;padding:8px 12px;background:var(--cream);border-radius:7px;border-left:2px solid var(--border2);}
+  .drbr{display:flex;justify-content:space-between;font-size:12px;color:var(--ink2);padding:3px 0;font-family:var(--mono);}
   /* Accordion */
   .acc{background:var(--cream);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
   .acc+.acc{margin-top:7px;}
@@ -779,19 +787,19 @@ const STYLES = `
   .acct:hover{background:rgba(0,0,0,0.025);}
   .accl{display:flex;align-items:center;gap:9px;min-width:0;}
   .accr{display:flex;align-items:center;gap:7px;flex-shrink:0;margin-left:10px;}
-  .acch{font-size:13px;font-weight:500;color:var(--ink);}
+  .acch{font-size:13.5px;font-weight:500;color:var(--ink);}
   .accb{border-top:1px solid var(--border);padding:13px 14px;background:var(--white);}
   .lvl{font-size:10px;font-weight:700;font-family:var(--mono);padding:2px 6px;border-radius:5px;flex-shrink:0;}
   /* Signal */
-  .sig{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--ink2);line-height:1.6;padding:5px 0;border-bottom:1px solid var(--border);}
+  .sig{display:flex;gap:9px;align-items:flex-start;font-size:14px;color:var(--ink2);line-height:1.65;padding:7px 0;border-bottom:1px solid var(--border);}
   .sig:last-child{border-bottom:none;}
   /* Claim */
-  .clm{padding:10px 12px;background:var(--red-lt);border:1px solid rgba(184,50,36,0.14);border-radius:8px;margin-top:7px;}
-  .clmq{font-size:12px;font-style:italic;color:var(--red);margin-bottom:3px;font-family:var(--serif);}
-  .clmi{font-size:12px;color:#7b1a11;}
+  .clm{padding:12px 14px;background:var(--red-lt);border:1px solid rgba(184,50,36,0.14);border-radius:8px;margin-top:8px;}
+  .clmq{font-size:13px;font-style:italic;color:var(--red);margin-bottom:4px;font-family:var(--serif);line-height:1.5;}
+  .clmi{font-size:13px;color:#7b1a11;line-height:1.55;}
   /* Edit */
-  .edt{padding:10px 12px;background:var(--olive-lt);border:1px solid var(--olive-md);border-radius:8px;margin-top:7px;}
-  .edtr{font-size:12px;color:var(--ink2);line-height:1.65;padding:1px 0;}
+  .edt{padding:12px 14px;background:var(--olive-lt);border:1px solid var(--olive-md);border-radius:8px;margin-top:8px;}
+  .edtr{font-size:13px;color:var(--ink2);line-height:1.7;padding:2px 0;}
   .edtr strong{color:var(--ink);font-weight:600;}
   /* Outline scroll */
   .osc{max-height:230px;overflow-y:auto;border:1px solid var(--border);border-radius:9px;padding:7px 13px;background:var(--cream);}
@@ -802,8 +810,8 @@ const STYLES = `
   /* Info rows */
   .ir{padding:12px 0;border-bottom:1px solid var(--border);}
   .ir:last-child{border-bottom:none;}
-  .irl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.07em;color:var(--muted);margin-bottom:5px;}
-  .irv{font-size:13px;color:var(--ink2);line-height:1.65;}
+  .irl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.07em;color:var(--muted);margin-bottom:6px;}
+  .irv{font-size:14px;color:var(--ink2);line-height:1.7;}
   /* Scrollbar */
   ::-webkit-scrollbar{width:4px;height:4px;}
   ::-webkit-scrollbar-track{background:transparent;}
@@ -1410,18 +1418,65 @@ RULES:
                         ))}
                       </div>
                     )}
-                    {results.claude?.groundingScore !== undefined && (
-                      <div style={{ marginTop: '15px', padding: '14px', background: 'var(--cream)', border: '1px solid var(--border)', borderRadius: '10px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--muted)' }}>Grounding Score (Claude)</div>
-                          <span style={{ fontFamily: 'var(--mono)', fontSize: '16px', fontWeight: 700, color: sfill(results.claude.groundingScore / 100) }}>{results.claude.groundingScore}<span style={{ fontSize: '12px', color: 'var(--muted)', fontWeight: 400 }}>/100</span></span>
+                    {results.claude?.groundingScore !== undefined && (() => {
+                      const raw = results.claude.groundingExplanation || '';
+                      const KNOWN_LABELS = [
+                        'Title Clarity', 'Structural Alignment', 'Introduction Anchoring',
+                        'Content Verification', 'Audience Definition',
+                        'Title', 'Structure', 'Introduction', 'Headings', 'Audience', 'Score', 'Total'
+                      ];
+                      const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+                      const sections = [];
+                      let current = null;
+                      for (const line of lines) {
+                        const isHeading = KNOWN_LABELS.some(lbl =>
+                          line.toLowerCase().startsWith(lbl.toLowerCase() + ':') ||
+                          line.toLowerCase().startsWith(lbl.toLowerCase() + ' (')
+                        );
+                        if (isHeading) {
+                          if (current) sections.push(current);
+                          const colonIdx = line.indexOf(':');
+                          const lbl = colonIdx > -1 ? line.slice(0, colonIdx) : line;
+                          const rest = colonIdx > -1 ? line.slice(colonIdx + 1).trim() : '';
+                          current = { label: lbl.trim(), lines: rest ? [rest] : [] };
+                        } else if (current) {
+                          current.lines.push(line);
+                        } else {
+                          sections.push({ label: null, lines: [line] });
+                        }
+                      }
+                      if (current) sections.push(current);
+                      const hasStructure = sections.some(s => s.label);
+                      return (
+                        <div style={{ marginTop: '15px', background: 'var(--cream)', border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden' }}>
+                          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--muted)' }}>Grounding Score (Claude)</div>
+                            <span style={{ fontFamily: 'var(--mono)', fontSize: '16px', fontWeight: 700, color: sfill(results.claude.groundingScore / 100) }}>
+                              {results.claude.groundingScore}<span style={{ fontSize: '12px', color: 'var(--muted)', fontWeight: 400 }}>/100</span>
+                            </span>
+                          </div>
+                          <div style={{ padding: '0 16px 4px' }}>
+                            <div style={{ padding: '10px 0 12px' }}><Bar score={results.claude.groundingScore} max={100} h={5} /></div>
+                          </div>
+                          {raw && (
+                            <div style={{ borderTop: '1px solid var(--border)' }}>
+                              {hasStructure ? sections.map((sec, si) => (
+                                <div key={si} style={{ padding: '10px 16px', borderBottom: si < sections.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                                  {sec.label && (
+                                    <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--olive)', marginBottom: '4px' }}>{sec.label}</div>
+                                  )}
+                                  {sec.lines.map((ln, li) => (
+                                    <div key={li} style={{ fontSize: '13px', color: 'var(--ink2)', lineHeight: 1.65 }}>{ln}</div>
+                                  ))}
+                                </div>
+                              )) : (
+                                <div style={{ padding: '14px 16px', fontSize: '13px', color: 'var(--ink2)', lineHeight: 1.7, whiteSpace: 'pre-line' }}>{raw}</div>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        <div style={{ marginBottom: '8px' }}><Bar score={results.claude.groundingScore} max={100} h={4} /></div>
-                        {results.claude.groundingExplanation && (
-                          <div style={{ fontSize: '12px', color: 'var(--muted)', lineHeight: 1.65, fontFamily: 'var(--mono)', whiteSpace: 'pre-wrap' }}>{results.claude.groundingExplanation}</div>
-                        )}
-                      </div>
-                    )}
+                      );
+                    })()}
                   </div>
                 </div>
               );
