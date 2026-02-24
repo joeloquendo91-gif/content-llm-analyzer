@@ -920,9 +920,16 @@ export default function ContentAnalyzer() {
   };
 
   const analyzeNLP = async (content) => {
+    const trimmed = content.slice(0, 20000);
     if (googleApiKey?.trim()) {
-      const r = await fetch(`https://language.googleapis.com/v1/documents:classifyText?key=${googleApiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ document: { type: 'PLAIN_TEXT', content: content.slice(0, 20000) } }) });
-      if (!r.ok) { const e = await r.json(); throw new Error(e.error?.message || 'Google NLP error'); }
+      const r = await fetch(`https://language.googleapis.com/v1/documents:classifyText?key=${googleApiKey}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ document: { type: 'PLAIN_TEXT', content: trimmed } })
+      });
+      if (!r.ok) {
+        const e = await r.json();
+        throw new Error(`Google NLP: ${e.error?.message || e.error?.status || JSON.stringify(e)}`);
+      }
       const data = await r.json();
       if (!data.categories?.length) return { categories: [], primaryCategory: null, secondaryCategory: null, clarityGap: 0, alignmentStatus: 'No categories detected' };
       const sorted = [...data.categories].sort((a, b) => b.confidence - a.confidence);
@@ -930,8 +937,15 @@ export default function ContentAnalyzer() {
       const clarityGap = secondary ? primary.confidence - secondary.confidence : primary.confidence;
       return { categories: sorted, primaryCategory: primary, secondaryCategory: secondary, clarityGap, alignmentStatus: clarityGap >= 0.3 ? 'Aligned' : clarityGap >= 0.15 ? 'Mixed (Acceptable)' : 'Misaligned' };
     }
-    const r = await fetch('/api/google-nlp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: content.slice(0, 20000) }) });
-    if (!r.ok) { const e = await r.json(); throw new Error(e.error || 'Google NLP error'); }
+    const r = await fetch('/api/google-nlp', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: trimmed })
+    });
+    if (!r.ok) {
+      let msg = 'Google NLP error';
+      try { const e = await r.json(); msg = e.error || e.message || msg; } catch {}
+      throw new Error(msg);
+    }
     return r.json();
   };
 
@@ -1119,12 +1133,28 @@ RULES:
         extraction = { title: 'Manual Content', introduction: extractIntro(manualContent), headings: [], text: manualContent };
       } else if (extensionData) {
         extraction = extensionData;
-        contentText = extensionData.text || (await fetchUrlContent(extensionData.url)).text;
+        // extensionData.text may be the field, fall back to fetching
+        const rawText = extensionData.text || extensionData.content || '';
+        contentText = rawText || (await fetchUrlContent(extensionData.url)).text || (await fetchUrlContent(extensionData.url)).content || '';
       } else {
         extraction = await fetchUrlContent(url);
-        contentText = extraction.text;
-        if (!extraction.introduction && extraction.text) extraction.introduction = extractIntro(extraction.text);
+        // /api/extract may return .text or .content — handle both
+        contentText = extraction.text || extraction.content || '';
+        if (!extraction.introduction) {
+          extraction.introduction = extractIntro(contentText);
+        }
       }
+
+      // Guard: NLP requires at least 20 tokens
+      const wordCount = contentText.trim().split(/\s+/).filter(Boolean).length;
+      if (wordCount < 20) {
+        throw new Error(
+          contentText.trim().length === 0
+            ? 'No text content could be extracted from this URL. Try switching to "Paste Content" and pasting the text manually.'
+            : `Not enough text to analyze — only ${wordCount} words found. Google NLP requires at least 20 words.`
+        );
+      }
+
       const nlp = await analyzeNLP(contentText);
       const sentiment = await analyzeSentiment(contentText);
       const claude = await analyzeClaude(contentText, nlp, extraction);
