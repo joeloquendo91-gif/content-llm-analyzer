@@ -1219,8 +1219,8 @@ RULES:
 
       <div className="hero">
         <div className="hero-tag"><div className="hero-dot" />Google NLP + Claude</div>
-        <h1>See your content<br />the way <em>AI sees it</em></h1>
-        <p>Understand how LLMs and search engines read your pages. Get section-level edits grounded in real data, not guesswork.</p>
+        <h1>Stop publishing content<br /><em>AI ignores.</em></h1>
+        <p>Most pages aren't ignored because they're bad — they're ignored because they're ambiguous. Fix that with section-level edits backed by real classification data.</p>
       </div>
 
       <main className="main">
