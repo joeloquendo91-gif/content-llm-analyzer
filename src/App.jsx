@@ -520,23 +520,45 @@ function CategoryPicker({ value, onChange, label, placeholder = 'â€” Optional â€
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const ref = useRef(null);
+  const dropRef = useRef(null);
   const searchRef = useRef(null);
+  const DROP_HEIGHT = 320; // max height of dropdown panel
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0, openUp: false });
 
-  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 });
+  const calcPos = () => {
+    if (!ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - r.bottom;
+    const openUp = spaceBelow < DROP_HEIGHT + 8 && r.top > DROP_HEIGHT + 8;
+    setDropPos({
+      top: openUp ? r.top - DROP_HEIGHT - 4 : r.bottom + 4,
+      left: r.left,
+      width: r.width,
+      openUp,
+    });
+  };
 
   useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const handler = (e) => {
+      const inTrigger = ref.current && ref.current.contains(e.target);
+      const inDrop = dropRef.current && dropRef.current.contains(e.target);
+      if (!inTrigger && !inDrop) setOpen(false);
+    };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
   useEffect(() => {
     if (open) {
+      calcPos();
       if (searchRef.current) searchRef.current.focus();
-      if (ref.current) {
-        const r = ref.current.getBoundingClientRect();
-        setDropPos({ top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX, width: r.width });
-      }
+      // Recalculate on scroll or resize while open
+      window.addEventListener('scroll', calcPos, true);
+      window.addEventListener('resize', calcPos);
+      return () => {
+        window.removeEventListener('scroll', calcPos, true);
+        window.removeEventListener('resize', calcPos);
+      };
     }
   }, [open]);
 
@@ -582,10 +604,12 @@ function CategoryPicker({ value, onChange, label, placeholder = 'â€” Optional â€
       </button>
 
       {open && (
-        <div style={{
+        <div ref={dropRef} style={{
           position: 'fixed', top: dropPos.top, left: dropPos.left, width: dropPos.width, zIndex: 9999,
+          maxHeight: 320,
           background: 'var(--white)', border: '1px solid var(--border2)',
-          borderRadius: '11px', overflow: 'hidden',
+          borderRadius: dropPos.openUp ? '11px 11px 6px 6px' : '6px 6px 11px 11px',
+          overflow: 'hidden', display: 'flex', flexDirection: 'column',
           boxShadow: '0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08)',
         }}>
           {/* Search */}
@@ -609,7 +633,7 @@ function CategoryPicker({ value, onChange, label, placeholder = 'â€” Optional â€
           </div>
 
           {/* List */}
-          <div style={{ maxHeight: '260px', overflowY: 'auto' }}>
+          <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
             {/* Clear option */}
             <div
               onClick={() => { onChange(''); setSearch(''); setOpen(false); }}
