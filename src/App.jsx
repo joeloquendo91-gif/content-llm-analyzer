@@ -1082,18 +1082,15 @@ Return JSON ONLY (no markdown):
     {
       "heading": "exact heading text",
       "level": "h2|h3",
-      "position": "Section N of M",
-      "expectedRole": "what this section should be doing based on where it sits on the page",
       "deliversOnPromise": true,
-      "mixedSignals": ["any clarity issues — plain language, or empty array if clear"],
       "ungroundedClaims": [
-        { "quote": "exact text that lacks support", "issue": "plain explanation of the problem" }
+        { "quote": "exact text", "issue": "why it lacks support" }
       ],
       "suggestedEdits": [
         {
-          "location": "where exactly (e.g. the heading, the opening sentence, the third paragraph)",
-          "change": "what to do — specific and concrete",
-          "reason": "why this helps the reader or search understand the page better"
+          "location": "where exactly",
+          "change": "what to do",
+          "reason": "why it helps"
         }
       ]
     }
@@ -1108,9 +1105,9 @@ Return JSON ONLY (no markdown):
 
 RULES:
 - sectionAnalysis covers H2s and H3s only — never include the H1
-- Include every H2/H3 section — never skip one
+- Only include sections that have suggestedEdits or ungroundedClaims — skip sections with nothing to flag
 - 1-3 edits per section max — only the ones that actually matter
-- Empty arrays for mixedSignals and ungroundedClaims if there are no real issues
+- Empty array for ungroundedClaims if there are no ungrounded claims
 - Never invent sections not in the page
 - titleEdit: only flag if the title text itself is a problem — not missing content beneath it
 - Write like a smart editor, not a data scientist
