@@ -1166,12 +1166,6 @@ setResults({
             <span className="font-semibold">Title:</span>{" "}
             {results.extraction.title || "—"}
           </div>
-          <div>
-            <span className="font-semibold">Introduction:</span>
-            <div className="mt-2 text-sm text-gray-700 whitespace-pre-line leading-relaxed">
-              {results.extraction.introduction || "—"}
-            </div>
-          </div>
         </div>
 
         <div className="border rounded-lg p-4 bg-gray-50 max-h-72 overflow-auto">
