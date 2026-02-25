@@ -1516,6 +1516,32 @@ RULES:
               </div>
             )}
 
+            {/* Highest Impact Edit */}
+            {results.claude?.sectionAnalysis?.length > 0 && (() => {
+              // Find the first section with a suggested edit — usually H1/title
+              const top = results.claude.sectionAnalysis.find(s => s.suggestedEdits?.length > 0);
+              if (!top) return null;
+              const edit = top.suggestedEdits[0];
+              return (
+                <div className="rc" style={{ borderLeft: '3px solid var(--olive)' }}>
+                  <div className="rch">
+                    <div className="rci" style={{ background: 'var(--olive-lt)' }}><Zap size={15} color="var(--olive)" /></div>
+                    <div><div className="rct">Highest Impact Edit</div><div className="rcs">Fix this first — it shapes how everything else is read</div></div>
+                  </div>
+                  <div className="rcb">
+                    <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--muted)', marginBottom: '8px' }}>{top.level?.toUpperCase()} — {top.heading}</div>
+                    <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--ink)', fontFamily: 'var(--serif)', lineHeight: 1.5, marginBottom: '12px' }}>{edit.change}</div>
+                    <div style={{ fontSize: '13px', color: 'var(--ink2)', lineHeight: 1.65, borderTop: '1px solid var(--border)', paddingTop: '10px' }}>
+                      <span style={{ fontWeight: 600, color: 'var(--ink)' }}>Where: </span>{edit.location}
+                    </div>
+                    <div style={{ fontSize: '13px', color: 'var(--ink2)', lineHeight: 1.65, marginTop: '4px' }}>
+                      <span style={{ fontWeight: 600, color: 'var(--ink)' }}>Why it matters: </span>{edit.reason}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Section Analysis */}
             {results.claude?.sectionAnalysis?.length > 0 && (
               <div className="rc">
