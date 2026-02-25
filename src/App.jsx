@@ -1123,6 +1123,7 @@ RULES:
     const txt = data.content?.find(c => c.type === 'text')?.text || '';
     const m = txt.match(/\{[\s\S]*\}/);
     if (!m) throw new Error('Claude did not return valid JSON');
+    console.log('RAW_CLAUDE_RESPONSE:', m[0].slice(0, 3000));
 
     // Attempt 1: parse as-is
     try { return JSON.parse(m[0]); } catch (e1) {
@@ -1131,34 +1132,16 @@ RULES:
         .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '')
         .replace(/,\s*([\]\}])/g, '$1');
       try { return JSON.parse(clean1); } catch (e2) {
-        // Attempt 3: fix unescaped newlines and quotes inside string values
+        // Attempt 3: replace literal newlines/tabs inside JSON strings
         try {
-          let out = '', inStr = false;
-          for (let i = 0; i < clean1.length; i++) {
-            const ch = clean1[i];
-            const prev = i > 0 ? clean1[i - 1] : '';
-            const prevprev = i > 1 ? clean1[i - 2] : '';
-            const isEscaped = prev === '\\' && prevprev !== '\\';
-            if (ch === '"' && !isEscaped) {
-              if (!inStr) {
-                inStr = true; out += ch;
-              } else {
-                const rest = clean1.slice(i + 1).trimStart();
-                if (/^[:\,\}\]\r\n]/.test(rest) || rest === '') {
-                  inStr = false; out += ch;
-                } else {
-                  out += '\\"';
-                }
-              }
-            } else if (inStr && ch === '\n') {
-              out += '\\n';
-            } else if (inStr && ch === '\r') {
-              out += '\\r';
-            } else {
-              out += ch;
-            }
-          }
-          return JSON.parse(out);
+          // This regex finds JSON string values and replaces bare newlines/tabs within them
+          const clean2 = clean1.replace(/"((?:[^"\\]|\\.)*)"/g, (match) => {
+            return match
+              .replace(/\n/g, '\\n')
+              .replace(/\r/g, '\\r')
+              .replace(/\t/g, '\\t');
+          });
+          return JSON.parse(clean2);
         } catch (e3) {
           // Attempt 4: partial extraction of scalar fields
           const safe = (key, fallback) => {
