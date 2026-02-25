@@ -929,7 +929,7 @@ export default function ContentAnalyzer() {
     const src = p.get('source'), enc = p.get('data'), iu = p.get('url');
     if (src === 'extension' && enc) {
       try {
-        const d = JSON.parse(decodeURIComponent(escape(atob(enc))));
+        const d = JSON.parse(decodeURIComponent(atob(enc)));
         setExtensionData({ title: d.title || 'Untitled', introduction: d.introduction || '', headings: d.headings || [], text: d.text || '', url: d.url || '', source: 'extension' });
         setUrl(d.url || '');
       } catch (e) { console.error(e); }
