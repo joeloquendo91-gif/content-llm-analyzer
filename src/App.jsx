@@ -655,6 +655,12 @@ D2) Highest-Impact Edit
 E) Expected Outcome
 - In 1–2 sentences, explain how these changes would improve interpretability and reduce intent competition.
 
+F) Introduction Analysis
+- Does the introduction establish who the page is for (audience)?
+- Does the introduction deliver on what the title promises?
+- Identify any issues: generic framing, missing audience signal, wrong tone, buried purpose.
+- Suggest one specific edit if needed — not a rewrite, just a targeted improvement.
+
 GROUNDING ANALYSIS (MANDATORY EVIDENCE-BASED SCORING):
 
 Your grounding score MUST be based on verifiable evidence from the extracted outline.
@@ -750,11 +756,18 @@ Return JSON ONLY (no markdown). Use exactly this schema:
     "change": "D2. The single highest-impact edit (e.g., major title rewrite, key H1 change)",
     "reason": "D2. Why this specific edit has exceptional impact compared to all others"
   },
-  "expectedOutcome": "E. 1–2 sentences"
+  "expectedOutcome": "E. 1–2 sentences",
+  "introAnalysis": {
+    "establishesAudience": true,
+    "deliversOnTitle": true,
+    "issues": ["any plain-language issues with the intro, or empty array if fine"],
+    "suggestedEdit": "one specific change to improve the intro, or null if fine"
+  }
 }
 
 RULES (MANDATORY):
 - suggestedEdits MUST contain exactly 6 items.
+- introAnalysis.suggestedEdit must be null if the intro is already clear and well-aligned.
 - highestImpactEdit MUST be DIFFERENT from all 6 suggestedEdits.
 - highestImpactEdit should target the highest-leverage change (often the H1 or main title).
 - highestImpactEdit should be a bigger, more impactful change than the other 6.
@@ -1481,6 +1494,49 @@ setResults({
         </ul>
       </div>
     )}
+
+    {/* Intro Analysis */}
+    {results.claude?.introAnalysis && (() => {
+      const ia = results.claude.introAnalysis;
+      const allGood = ia.establishesAudience && ia.deliversOnTitle && !ia.issues?.length && !ia.suggestedEdit;
+      const signalColor = allGood ? '#16a34a' : (!ia.establishesAudience || !ia.deliversOnTitle) ? '#dc2626' : '#d97706';
+      const signalBg = allGood ? '#f0fdf4' : (!ia.establishesAudience || !ia.deliversOnTitle) ? '#fef2f2' : '#fffbeb';
+      const signalBorder = allGood ? '#bbf7d0' : (!ia.establishesAudience || !ia.deliversOnTitle) ? '#fecaca' : '#fde68a';
+      return (
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-6" style={{ borderLeft: `4px solid ${signalColor}` }}>
+          <h2 className="text-xl font-bold text-gray-800 mb-4">Introduction Analysis</h2>
+          <div className="flex gap-3 mb-4">
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium" style={{ background: ia.establishesAudience ? '#f0fdf4' : '#fef2f2', color: ia.establishesAudience ? '#16a34a' : '#dc2626' }}>
+              <span>{ia.establishesAudience ? '✓' : '✗'}</span> Establishes audience
+            </div>
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium" style={{ background: ia.deliversOnTitle ? '#f0fdf4' : '#fef2f2', color: ia.deliversOnTitle ? '#16a34a' : '#dc2626' }}>
+              <span>{ia.deliversOnTitle ? '✓' : '✗'}</span> Delivers on title
+            </div>
+          </div>
+          {ia.issues?.length > 0 && (
+            <div className="mb-4">
+              <div className="text-sm font-semibold text-gray-700 mb-2">Issues</div>
+              <ul className="space-y-1">
+                {ia.issues.map((issue, i) => (
+                  <li key={i} className="text-sm text-gray-600 flex gap-2">
+                    <span className="text-amber-500 flex-shrink-0">⚠</span>{issue}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {ia.suggestedEdit && (
+            <div className="rounded-lg p-4" style={{ background: signalBg, border: `1px solid ${signalBorder}` }}>
+              <div className="text-sm font-semibold mb-1" style={{ color: signalColor }}>Suggested Edit</div>
+              <div className="text-sm text-gray-700">{ia.suggestedEdit}</div>
+            </div>
+          )}
+          {allGood && (
+            <div className="text-sm text-green-700">✓ Introduction is well-aligned — clearly establishes audience and delivers on the title promise.</div>
+          )}
+        </div>
+      );
+    })()}
 
     {/* D */}
     {Array.isArray(results.claude.suggestedEdits) && results.claude.suggestedEdits.length > 0 && (
