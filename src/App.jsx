@@ -1114,6 +1114,7 @@ RULES:
 - Never invent sections not in the page
 - titleEdit: only flag if the title text itself is a problem — not missing content beneath it
 - Write like a smart editor, not a data scientist
+- CRITICAL: Return valid JSON only. Never use unescaped double quotes inside string values — use single quotes or rephrase instead. Never leave trailing commas.
 - For introGuidance: set needed=false and leave currentIssue/suggestion null if the intro already aligns well with the page topic`;
 
     const r = await fetch('/api/claude', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
@@ -1122,7 +1123,37 @@ RULES:
     const txt = data.content?.find(c => c.type === 'text')?.text || '';
     const m = txt.match(/\{[\s\S]*\}/);
     if (!m) throw new Error('Claude did not return valid JSON');
-    return JSON.parse(m[0]);
+
+    // Attempt 1: parse as-is
+    try { return JSON.parse(m[0]); } catch (e1) {
+      // Attempt 2: strip control characters and try again
+      try {
+        const cleaned = m[0]
+          .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '') // strip non-printable except \t \n \r
+          .replace(/,\s*([\]\}])/g, '$1');                  // trailing commas
+        return JSON.parse(cleaned);
+      } catch (e2) {
+        // Attempt 3: extract just the safe fields we need and return a partial result
+        const safe = (key, fallback) => {
+          const r = new RegExp('"' + key + '"\\s*:\\s*("(?:[^"\\\\]|\\\\.)*"|\\d+|true|false|null)');
+          const hit = m[0].match(r);
+          if (!hit) return fallback;
+          try { return JSON.parse(hit[1]); } catch { return fallback; }
+        };
+        console.warn('Claude JSON parse failed, using partial extraction:', e2.message);
+        return {
+          categoryMatchStatus: safe('categoryMatchStatus', 'No target set'),
+          currentInterpretationSummary: safe('currentInterpretationSummary', ''),
+          expectedOutcome: safe('expectedOutcome', ''),
+          titleEdit: null,
+          intentAlignmentAssessment: { status: 'Mixed', reason: 'Could not fully parse response — try again.' },
+          topMixedSignals: [],
+          sectionAnalysis: [],
+          introGuidance: { needed: false, currentIssue: null, suggestion: null },
+          _parseError: e2.message,
+        };
+      }
+    }
   };
 
   const calcApiScores = (nlp, extraction) => {
@@ -1332,6 +1363,13 @@ RULES:
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Parse warning */}
+            {results.claude?._parseError && (
+              <div style={{ padding: '12px 16px', background: 'var(--amber-lt)', border: '1px solid #f5d89e', borderRadius: '10px', fontSize: '13px', color: 'var(--amber)', marginBottom: '4px' }}>
+                <strong>Partial results</strong> — the analysis returned some invalid formatting. Section edits may be incomplete. Try re-running for full results.
               </div>
             )}
 
