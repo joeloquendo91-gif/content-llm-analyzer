@@ -2,7 +2,7 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   try {
-    const { prompt, model = "claude-sonnet-4-20250514", max_tokens = 3000 } = req.body || {};
+    const { prompt, model = "claude-sonnet-4-20250514", max_tokens = 8000 } = req.body || {};
     if (!prompt) return res.status(400).json({ error: "Missing prompt" });
 
     const r = await fetch("https://api.anthropic.com/v1/messages", {
