@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, AlertCircle, Info, ChevronDown, BarChart2, Layers, ArrowRight, Zap, X } from 'lucide-react';
+import { Search, AlertCircle, Info, ChevronDown, BarChart2, Layers, ArrowRight, Zap, X, AlignLeft } from 'lucide-react';
 
 // Full Google NLP V1 category list with deep paths
 const GOOGLE_CATEGORIES = [
@@ -1034,14 +1034,20 @@ What Google NLP detected this page is about:
 - Secondary topic: ${nlp.secondaryCategory ? `${nlp.secondaryCategory.name} (${(nlp.secondaryCategory.confidence*100).toFixed(1)}% confidence)` : 'Not detected'}
 - Topic focus: ${(nlp.clarityGap*100).toFixed(1)}% gap between primary and secondary (higher = more focused)${intentCtx ? '\n\nWhat the team wants this page to be about:' + intentCtx : ''}
 
-SECTIONS TO REVIEW:
+PAGE TITLE REVIEW:
+The H1 is "${title}" — it is the page title only, not a content section.
+Only flag a title issue if the title itself is unclear, misleading, or hurts how search and AI understand the page.
+Do not suggest adding content "under" or "below" the title — that is the intro's job, handled separately.
+If the title is fine, set titleEdit to null.
+
+CONTENT SECTIONS TO REVIEW:
 ${sectionsText}
 
-FOR EACH SECTION, tell the team:
-1. Is the heading clear — does a reader instantly know what this section is for and who it's for?
+FOR EACH SECTION (H2s and H3s only — never the H1), tell the team:
+1. Is the heading clear — does a reader instantly know what this section is for?
 2. Does the content actually deliver what the heading promises?
-3. One specific edit that would make the biggest difference (be concrete — point to the exact thing to change)
-4. Flag anything that reads like an unsupported claim — phrases like "the best", "proven to", "always", "never" without any evidence behind them
+3. One specific edit that would make the biggest difference
+4. Flag unsupported claims — phrases like "the best", "proven to", "always", "never" without evidence
 
 THEN give an overall page summary:
 - What topic does this page actually come across as (in plain language, not category names)?
@@ -1058,6 +1064,10 @@ CategoryMatchStatus — only include if the team specified a target topic:
 Return JSON ONLY (no markdown):
 
 {
+  "titleEdit": {
+    "issue": "What is wrong with the title — plain language, or null if the title is fine",
+    "change": "Specific suggested change to the title text itself — or null if fine"
+  },
   "categoryMatchStatus": "ON TOPIC|WRONG EMPHASIS|OFF TOPIC|No target set",
   "currentInterpretationSummary": "What this page actually reads as — plain language, 1-2 sentences",
   "intentAlignmentAssessment": {
@@ -1071,7 +1081,7 @@ Return JSON ONLY (no markdown):
   "sectionAnalysis": [
     {
       "heading": "exact heading text",
-      "level": "h1|h2|h3",
+      "level": "h2|h3",
       "position": "Section N of M",
       "expectedRole": "what this section should be doing based on where it sits on the page",
       "deliversOnPromise": true,
@@ -1088,15 +1098,23 @@ Return JSON ONLY (no markdown):
       ]
     }
   ],
-  "expectedOutcome": "What gets better if the team makes these changes — 1-2 plain sentences"
+  "expectedOutcome": "What gets better if the team makes these changes — 1-2 plain sentences",
+  "introGuidance": {
+    "needed": true,
+    "currentIssue": "Plain explanation of what the intro is doing wrong — or null if it's fine",
+    "suggestion": "How to reframe the intro to better match the page topic and audience — specific and actionable, not a rewrite"
+  }
 }
 
 RULES:
-- Include every section — never skip one
+- sectionAnalysis covers H2s and H3s only — never include the H1
+- Include every H2/H3 section — never skip one
 - 1-3 edits per section max — only the ones that actually matter
 - Empty arrays for mixedSignals and ungroundedClaims if there are no real issues
 - Never invent sections not in the page
-- Write like a smart editor, not a data scientist`;
+- titleEdit: only flag if the title text itself is a problem — not missing content beneath it
+- Write like a smart editor, not a data scientist
+- For introGuidance: set needed=false and leave currentIssue/suggestion null if the intro already aligns well with the page topic`;
 
     const r = await fetch('/api/claude', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
     if (!r.ok) { const e = await r.json(); throw new Error(e?.error || 'Claude failed'); }
@@ -1288,19 +1306,14 @@ RULES:
               <div className="rc">
                 <div className="rch">
                   <div className="rci" style={{ background: 'var(--olive-lt)' }}><Layers size={15} color="var(--olive)" /></div>
-                  <div><div className="rct">Extracted Outline</div><div className="rcs">Title, introduction, and heading structure</div></div>
+                  <div><div className="rct">Extracted Outline</div><div className="rcs">Title and heading structure</div></div>
                 </div>
                 <div className="rcb">
                   <div style={{ marginBottom: '13px' }}>
                     <div className="flbl">Title</div>
                     <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--ink)', fontFamily: 'var(--serif)', lineHeight: 1.4 }}>{results.extraction.title || '—'}</div>
                   </div>
-                  {results.extraction.introduction && (
-                    <div style={{ marginBottom: '15px' }}>
-                      <div className="flbl">Introduction (first 250 words)</div>
-                      <div className="introb">{results.extraction.introduction}</div>
-                    </div>
-                  )}
+
                   {results.extraction.headings?.length > 0 && (
                     <div>
                       <div className="flbl">Heading Structure</div>
@@ -1364,132 +1377,6 @@ RULES:
               </div>
             </div>
 
-            {/* Scoring Rubric */}
-            {results.apiScores && (() => {
-              const a = results.apiScores, d = results.claude?.dimensionScores;
-              const dims = [
-                { label: 'Category Confidence', src: 'NLP API', api: true, score: a.categoryConfidence.score, max: 15, detail: `Primary confidence: ${a.categoryConfidence.confidence}%` },
-                { label: 'Clarity Gap', src: 'NLP API', api: true, score: a.clarityGap.score, max: 10, detail: `Gap between primary and secondary: ${a.clarityGap.gap}%` },
-                { label: 'Title-to-Entity Match', src: 'NLP API', api: true, score: a.titleEntityMatch.score, max: 15, detail: `${a.titleEntityMatch.matches} of top 5 entities in title${a.titleEntityMatch.topEntities.length ? ': ' + a.titleEntityMatch.topEntities.join(', ') : ''}` },
-                { label: 'Heading-to-Entity Match', src: 'NLP API', api: true, score: a.headingEntityMatch.score, max: 15, detail: `${a.headingEntityMatch.matched} of ${a.headingEntityMatch.total} H2s contain a salient entity` },
-                { label: 'Intro Audience Signal', src: 'Claude', api: false, score: d?.introAudienceSignal?.score || 0, max: 10, detail: d?.introAudienceSignal?.evidence || d?.introAudienceSignal?.reason || 'Does the intro clearly state who this page is for?' },
-                { label: 'Scope Consistency', src: 'Claude', api: false, score: d?.scopeConsistency?.score || 0, max: 10, detail: d?.scopeConsistency?.reason || 'Do all sections stay on topic throughout?' },
-                { label: 'Content Delivery', src: 'Claude', api: false, score: d?.contentDelivery?.totalScore || 0, max: 25, detail: d?.contentDelivery?.reason || 'Do sections deliver on what their headings promise?',
-                  breakdown: d?.contentDelivery ? [{ label: 'Sections match headings', score: d.contentDelivery.sectionDeliveryScore, max: 10 }, { label: 'Claims are supported', score: d.contentDelivery.claimSupportScore, max: 10 }, { label: 'No unsupported language', score: d.contentDelivery.ungroundedLanguageScore, max: 5 }] : null },
-              ];
-              return (
-                <div className="rc">
-                  <div className="rch">
-                    <div className="rci" style={{ background: 'var(--olive-lt)' }}><Zap size={15} color="var(--olive)" /></div>
-                    <div style={{ flex: 1 }}><div className="rct">Content Clarity Score</div><div className="rcs">How well this content signals its topic to search and AI</div></div>
-                    <div style={{ textAlign: 'right' }}>
-                      <span style={{ fontFamily: 'var(--serif)', fontSize: '28px', fontWeight: 700, letterSpacing: '-0.5px', color: sfill(total / 100) }}>{total}</span>
-                      <span style={{ fontFamily: 'var(--mono)', fontSize: '14px', color: 'var(--muted)' }}>/100</span>
-                    </div>
-                  </div>
-                  <div style={{ padding: '0 22px' }}><Bar score={total} max={100} h={6} /></div>
-                  <div className="rcb" style={{ paddingTop: '13px' }}>
-                    {dims.map((dim, i) => (
-                      <div key={i} className="dr">
-                        <div className="drh">
-                          <div className="drl">
-                            <span className={`bdg ${dim.api ? 'bg' : 'bgy'}`}>{dim.src}</span>
-                            <span className="drn">{dim.label}</span>
-                          </div>
-                          <div className="drr">
-                            <div style={{ width: '80px' }}><Bar score={dim.score} max={dim.max} /></div>
-                            <span className="drs" style={{ color: sfill(dim.score / dim.max) }}>{dim.score}/{dim.max}</span>
-                          </div>
-                        </div>
-                        <div className="drd">{dim.detail}</div>
-                        {dim.breakdown && (
-                          <div className="drb">
-                            {dim.breakdown.map((b, j) => (
-                              <div key={j} className="drbr">
-                                <span>{b.label}</span>
-                                <span style={{ color: sfill(b.score / b.max) }}>{b.score}/{b.max}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                    {d?.contentDelivery?.ungroundedClaims?.length > 0 && (
-                      <div style={{ marginTop: '15px', padding: '13px', background: 'var(--red-lt)', border: '1px solid rgba(184,50,36,0.14)', borderRadius: '10px' }}>
-                        <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--red)', marginBottom: '9px' }}>Ungrounded Claims</div>
-                        {d.contentDelivery.ungroundedClaims.map((c, i) => (
-                          <div key={i} className="clm">
-                            <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '3px', fontFamily: 'var(--mono)' }}>{c.section}</div>
-                            <div className="clmq">"{c.quote}"</div>
-                            <div className="clmi">{c.issue}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {results.claude?.groundingScore !== undefined && (() => {
-                      const raw = results.claude.groundingExplanation || '';
-                      const KNOWN_LABELS = [
-                        'Title Clarity', 'Structural Alignment', 'Introduction Anchoring',
-                        'Content Verification', 'Audience Definition',
-                        'Title', 'Structure', 'Introduction', 'Headings', 'Audience', 'Score', 'Total'
-                      ];
-                      const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
-                      const sections = [];
-                      let current = null;
-                      for (const line of lines) {
-                        const isHeading = KNOWN_LABELS.some(lbl =>
-                          line.toLowerCase().startsWith(lbl.toLowerCase() + ':') ||
-                          line.toLowerCase().startsWith(lbl.toLowerCase() + ' (')
-                        );
-                        if (isHeading) {
-                          if (current) sections.push(current);
-                          const colonIdx = line.indexOf(':');
-                          const lbl = colonIdx > -1 ? line.slice(0, colonIdx) : line;
-                          const rest = colonIdx > -1 ? line.slice(colonIdx + 1).trim() : '';
-                          current = { label: lbl.trim(), lines: rest ? [rest] : [] };
-                        } else if (current) {
-                          current.lines.push(line);
-                        } else {
-                          sections.push({ label: null, lines: [line] });
-                        }
-                      }
-                      if (current) sections.push(current);
-                      const hasStructure = sections.some(s => s.label);
-                      return (
-                        <div style={{ marginTop: '15px', background: 'var(--cream)', border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden' }}>
-                          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--muted)' }}>Grounding Score (Claude)</div>
-                            <span style={{ fontFamily: 'var(--serif)', fontSize: '18px', fontWeight: 700, color: sfill(results.claude.groundingScore / 100) }}>
-                              {results.claude.groundingScore}<span style={{ fontSize: '12px', color: 'var(--muted)', fontWeight: 400 }}>/100</span>
-                            </span>
-                          </div>
-                          <div style={{ padding: '0 16px 4px' }}>
-                            <div style={{ padding: '10px 0 12px' }}><Bar score={results.claude.groundingScore} max={100} h={5} /></div>
-                          </div>
-                          {raw && (
-                            <div style={{ borderTop: '1px solid var(--border)' }}>
-                              {hasStructure ? sections.map((sec, si) => (
-                                <div key={si} style={{ padding: '10px 16px', borderBottom: si < sections.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                                  {sec.label && (
-                                    <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--olive)', marginBottom: '4px' }}>{sec.label}</div>
-                                  )}
-                                  {sec.lines.map((ln, li) => (
-                                    <div key={li} style={{ fontSize: '13px', color: 'var(--ink2)', lineHeight: 1.65 }}>{ln}</div>
-                                  ))}
-                                </div>
-                              )) : (
-                                <div style={{ padding: '14px 16px', fontSize: '13px', color: 'var(--ink2)', lineHeight: 1.7, whiteSpace: 'pre-line' }}>{raw}</div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </div>
-              );
-            })()}
-
             {/* Sentiment */}
             {results.sentiment && (
               <div className="rc">
@@ -1512,45 +1399,6 @@ RULES:
                       <div className="sts" style={{ color: 'var(--muted)' }}>{results.sentiment.documentSentiment.magnitude < 1 ? 'Very Low' : results.sentiment.documentSentiment.magnitude < 3 ? 'Low' : results.sentiment.documentSentiment.magnitude < 5 ? 'Moderate' : results.sentiment.documentSentiment.magnitude < 8 ? 'High' : 'Very High'}</div>
                     </div>
                   </div>
-                </div>
-              </div>
-            )}
-
-            {/* Highest Impact Edit */}
-            {results.claude?.sectionAnalysis?.length > 0 && (() => {
-              // Find the first section with a suggested edit — usually H1/title
-              const top = results.claude.sectionAnalysis.find(s => s.suggestedEdits?.length > 0);
-              if (!top) return null;
-              const edit = top.suggestedEdits[0];
-              return (
-                <div className="rc" style={{ borderLeft: '3px solid var(--olive)' }}>
-                  <div className="rch">
-                    <div className="rci" style={{ background: 'var(--olive-lt)' }}><Zap size={15} color="var(--olive)" /></div>
-                    <div><div className="rct">Highest Impact Edit</div><div className="rcs">Fix this first — it shapes how everything else is read</div></div>
-                  </div>
-                  <div className="rcb">
-                    <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--muted)', marginBottom: '8px' }}>{top.level?.toUpperCase()} — {top.heading}</div>
-                    <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--ink)', fontFamily: 'var(--serif)', lineHeight: 1.5, marginBottom: '12px' }}>{edit.change}</div>
-                    <div style={{ fontSize: '13px', color: 'var(--ink2)', lineHeight: 1.65, borderTop: '1px solid var(--border)', paddingTop: '10px' }}>
-                      <span style={{ fontWeight: 600, color: 'var(--ink)' }}>Where: </span>{edit.location}
-                    </div>
-                    <div style={{ fontSize: '13px', color: 'var(--ink2)', lineHeight: 1.65, marginTop: '4px' }}>
-                      <span style={{ fontWeight: 600, color: 'var(--ink)' }}>Why it matters: </span>{edit.reason}
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Section Analysis */}
-            {results.claude?.sectionAnalysis?.length > 0 && (
-              <div className="rc">
-                <div className="rch">
-                  <div className="rci" style={{ background: 'var(--olive-lt)' }}><Layers size={15} color="var(--olive)" /></div>
-                  <div><div className="rct">Section-by-Section Analysis</div><div className="rcs">Editor's notes — section by section</div></div>
-                </div>
-                <div className="rcb">
-                  {results.claude.sectionAnalysis.map((s, i) => <SecAcc key={i} section={s} />)}
                 </div>
               </div>
             )}
@@ -1588,6 +1436,89 @@ RULES:
                   {results.claude.expectedOutcome && (
                     <div className="ir"><div className="irl">What improves with these edits</div><div className="irv">{results.claude.expectedOutcome}</div></div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Highest Impact Edit */}
+            {results.claude && (() => {
+              // Title edit takes priority; fall back to first section edit
+              const hasTitleEdit = results.claude.titleEdit?.issue;
+              const topSection = results.claude.sectionAnalysis?.find(s => s.suggestedEdits?.length > 0);
+              if (!hasTitleEdit && !topSection) return null;
+
+              if (hasTitleEdit) {
+                return (
+                  <div className="rc" style={{ borderLeft: '3px solid var(--olive)' }}>
+                    <div className="rch">
+                      <div className="rci" style={{ background: 'var(--olive-lt)' }}><Zap size={15} color="var(--olive)" /></div>
+                      <div><div className="rct">Highest Impact Edit</div><div className="rcs">Fix this first — it shapes how everything else is read</div></div>
+                    </div>
+                    <div className="rcb">
+                      <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--muted)', marginBottom: '8px' }}>PAGE TITLE</div>
+                      <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--ink)', fontFamily: 'var(--serif)', lineHeight: 1.5, marginBottom: '12px' }}>{results.claude.titleEdit.change}</div>
+                      <div style={{ fontSize: '13px', color: 'var(--ink2)', lineHeight: 1.65, borderTop: '1px solid var(--border)', paddingTop: '10px' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--ink)' }}>Why it matters: </span>{results.claude.titleEdit.issue}
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              const edit = topSection.suggestedEdits[0];
+              return (
+                <div className="rc" style={{ borderLeft: '3px solid var(--olive)' }}>
+                  <div className="rch">
+                    <div className="rci" style={{ background: 'var(--olive-lt)' }}><Zap size={15} color="var(--olive)" /></div>
+                    <div><div className="rct">Highest Impact Edit</div><div className="rcs">Fix this first — it shapes how everything else is read</div></div>
+                  </div>
+                  <div className="rcb">
+                    <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--muted)', marginBottom: '8px' }}>{topSection.level?.toUpperCase()} — {topSection.heading}</div>
+                    <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--ink)', fontFamily: 'var(--serif)', lineHeight: 1.5, marginBottom: '12px' }}>{edit.change}</div>
+                    <div style={{ fontSize: '13px', color: 'var(--ink2)', lineHeight: 1.65, borderTop: '1px solid var(--border)', paddingTop: '10px' }}>
+                      <span style={{ fontWeight: 600, color: 'var(--ink)' }}>Where: </span>{edit.location}
+                    </div>
+                    <div style={{ fontSize: '13px', color: 'var(--ink2)', lineHeight: 1.65, marginTop: '4px' }}>
+                      <span style={{ fontWeight: 600, color: 'var(--ink)' }}>Why it matters: </span>{edit.reason}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Intro Guidance */}
+            {results.claude?.introGuidance?.needed && (
+              <div className="rc" style={{ borderLeft: '3px solid var(--amber)' }}>
+                <div className="rch">
+                  <div className="rci" style={{ background: 'var(--amber-lt)' }}><AlignLeft size={15} color="var(--amber)" /></div>
+                  <div><div className="rct">Introduction Framing</div><div className="rcs">How to better align your intro with the page</div></div>
+                </div>
+                <div className="rcb">
+                  {results.claude.introGuidance.currentIssue && (
+                    <div style={{ marginBottom: '12px' }}>
+                      <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--amber)', marginBottom: '5px' }}>Current Issue</div>
+                      <div style={{ fontSize: '13px', color: 'var(--ink2)', lineHeight: 1.65 }}>{results.claude.introGuidance.currentIssue}</div>
+                    </div>
+                  )}
+                  {results.claude.introGuidance.suggestion && (
+                    <div>
+                      <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--olive)', marginBottom: '5px' }}>Suggested Approach</div>
+                      <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--ink)', fontFamily: 'var(--serif)', lineHeight: 1.6 }}>{results.claude.introGuidance.suggestion}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Section Analysis */}
+            {results.claude?.sectionAnalysis?.length > 0 && (
+              <div className="rc">
+                <div className="rch">
+                  <div className="rci" style={{ background: 'var(--olive-lt)' }}><Layers size={15} color="var(--olive)" /></div>
+                  <div><div className="rct">Section-by-Section Analysis</div><div className="rcs">Editor's notes — section by section</div></div>
+                </div>
+                <div className="rcb">
+                  {results.claude.sectionAnalysis.filter(s => s.level !== 'h1').map((s, i) => <SecAcc key={i} section={s} />)}
                 </div>
               </div>
             )}
