@@ -1114,7 +1114,7 @@ RULES:
 - Never invent sections not in the page
 - titleEdit: only flag if the title text itself is a problem — not missing content beneath it
 - Write like a smart editor, not a data scientist
-- CRITICAL: Return valid JSON only. Never use unescaped double quotes inside string values — use single quotes or rephrase instead. Never leave trailing commas.
+- CRITICAL: Return valid JSON only. All string values must use single quotes for any quoted text inside them — NEVER nest double quotes inside a double-quoted JSON string value. Never leave trailing commas. When quoting a heading or example text within a string value, use single quotes.
 - For introGuidance: set needed=false and leave currentIssue/suggestion null if the intro already aligns well with the page topic`;
 
     const r = await fetch('/api/claude', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
@@ -1126,32 +1126,60 @@ RULES:
 
     // Attempt 1: parse as-is
     try { return JSON.parse(m[0]); } catch (e1) {
-      // Attempt 2: strip control characters and try again
-      try {
-        const cleaned = m[0]
-          .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '') // strip non-printable except \t \n \r
-          .replace(/,\s*([\]\}])/g, '$1');                  // trailing commas
-        return JSON.parse(cleaned);
-      } catch (e2) {
-        // Attempt 3: extract just the safe fields we need and return a partial result
-        const safe = (key, fallback) => {
-          const r = new RegExp('"' + key + '"\\s*:\\s*("(?:[^"\\\\]|\\\\.)*"|\\d+|true|false|null)');
-          const hit = m[0].match(r);
-          if (!hit) return fallback;
-          try { return JSON.parse(hit[1]); } catch { return fallback; }
-        };
-        console.warn('Claude JSON parse failed, using partial extraction:', e2.message);
-        return {
-          categoryMatchStatus: safe('categoryMatchStatus', 'No target set'),
-          currentInterpretationSummary: safe('currentInterpretationSummary', ''),
-          expectedOutcome: safe('expectedOutcome', ''),
-          titleEdit: null,
-          intentAlignmentAssessment: { status: 'Mixed', reason: 'Could not fully parse response — try again.' },
-          topMixedSignals: [],
-          sectionAnalysis: [],
-          introGuidance: { needed: false, currentIssue: null, suggestion: null },
-          _parseError: e2.message,
-        };
+      // Attempt 2: strip control characters + trailing commas
+      const clean1 = m[0]
+        .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '')
+        .replace(/,\s*([\]\}])/g, '$1');
+      try { return JSON.parse(clean1); } catch (e2) {
+        // Attempt 3: fix unescaped newlines and quotes inside string values
+        try {
+          let out = '', inStr = false;
+          for (let i = 0; i < clean1.length; i++) {
+            const ch = clean1[i];
+            const prev = i > 0 ? clean1[i - 1] : '';
+            const prevprev = i > 1 ? clean1[i - 2] : '';
+            const isEscaped = prev === '\\' && prevprev !== '\\';
+            if (ch === '"' && !isEscaped) {
+              if (!inStr) {
+                inStr = true; out += ch;
+              } else {
+                const rest = clean1.slice(i + 1).trimStart();
+                if (/^[:\,\}\]\r\n]/.test(rest) || rest === '') {
+                  inStr = false; out += ch;
+                } else {
+                  out += '\\"';
+                }
+              }
+            } else if (inStr && ch === '\n') {
+              out += '\\n';
+            } else if (inStr && ch === '\r') {
+              out += '\\r';
+            } else {
+              out += ch;
+            }
+          }
+          return JSON.parse(out);
+        } catch (e3) {
+          // Attempt 4: partial extraction of scalar fields
+          const safe = (key, fallback) => {
+            const r = new RegExp('"' + key + '"\\s*:\\s*("(?:[^"\\\\]|\\\\.)*"|\\d+|true|false|null)');
+            const hit = m[0].match(r);
+            if (!hit) return fallback;
+            try { return JSON.parse(hit[1]); } catch { return fallback; }
+          };
+          console.warn('Claude JSON parse failed, using partial extraction:', e3.message);
+          return {
+            categoryMatchStatus: safe('categoryMatchStatus', 'No target set'),
+            currentInterpretationSummary: safe('currentInterpretationSummary', ''),
+            expectedOutcome: safe('expectedOutcome', ''),
+            titleEdit: null,
+            intentAlignmentAssessment: { status: 'Mixed', reason: 'Could not fully parse response — try again.' },
+            topMixedSignals: [],
+            sectionAnalysis: [],
+            introGuidance: { needed: false, currentIssue: null, suggestion: null },
+            _parseError: e3.message,
+          };
+        }
       }
     }
   };
