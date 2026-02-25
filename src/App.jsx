@@ -1123,7 +1123,16 @@ RULES:
     const txt = data.content?.find(c => c.type === 'text')?.text || '';
     const m = txt.match(/\{[\s\S]*\}/);
     if (!m) throw new Error('Claude did not return valid JSON');
-    console.log('RAW_CLAUDE_RESPONSE:', m[0].slice(0, 3000));
+    console.log('RAW_CLAUDE_RESPONSE_FULL_LENGTH:', m[0].length);
+    // Log the exact spot where parsing fails
+    const tryLogFail = (json) => {
+      try { JSON.parse(json); } catch(e) {
+        const pos = parseInt(e.message.match(/position (\d+)/)?.[1] || 0);
+        console.log('FAIL_CONTEXT:', JSON.stringify(json.slice(Math.max(0,pos-100), pos+100)));
+        console.log('FAIL_MSG:', e.message);
+      }
+    };
+    tryLogFail(m[0]);
 
     // Attempt 1: parse as-is
     try { return JSON.parse(m[0]); } catch (e1) {
@@ -1132,18 +1141,25 @@ RULES:
         .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '')
         .replace(/,\s*([\]\}])/g, '$1');
       try { return JSON.parse(clean1); } catch (e2) {
-        // Attempt 3: walk char by char, escape bare newlines only while inside a string
+        // Attempt 3: escape literal newlines/tabs inside JSON string values
         try {
-          let out = '', inStr = false, esc = false;
+          let out = '', inStr = false;
           for (let i = 0; i < clean1.length; i++) {
-            const ch = clean1[i];
-            if (esc) { out += ch; esc = false; continue; }
-            if (ch === '\\') { out += ch; esc = true; continue; }
-            if (ch === '"') { inStr = !inStr; out += ch; continue; }
-            if (inStr && ch === '\n') { out += '\\n'; continue; }
-            if (inStr && ch === '\r') { out += '\\r'; continue; }
-            if (inStr && ch === '\t') { out += '\\t'; continue; }
-            out += ch;
+            if (clean1[i] === '"') {
+              // Count backslashes at end of output to detect escaped quotes
+              let numBs = 0, m = out.length - 1;
+              while (m >= 0 && out[m] === '\\') { numBs++; m--; }
+              if (numBs % 2 === 0) inStr = !inStr;
+              out += '"';
+            } else if (inStr && clean1[i] === '\n') {
+              out += '\\n';
+            } else if (inStr && clean1[i] === '\r') {
+              out += '\\r';
+            } else if (inStr && clean1[i] === '\t') {
+              out += '\\t';
+            } else {
+              out += clean1[i];
+            }
           }
           return JSON.parse(out);
         } catch (e3) {
