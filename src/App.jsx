@@ -1018,111 +1018,85 @@ export default function ContentAnalyzer() {
 
     const intentCtx = intendedPrimary || intendedSecondary ? `\nTarget Primary: ${intendedPrimary || '(not set)'}\nTarget Secondary: ${intendedSecondary || '(not set)'}` : '';
 
-    const prompt = `You are an expert in content intent and AI grounding analysis.
-Analyze this page section by section and provide specific, actionable editing recommendations per section.
+    const prompt = `You are a content editor helping a marketing team improve already-published or ready-to-publish content.
 
-IMPORTANT:
-- Focus on clarity of intent and audience for each section
-- Suggest minimal, non-destructive edits only
-- Do NOT rewrite content
-- Do NOT change tone or voice
-- Flag ungrounded claims (claims that don't show their work) but do NOT fact-check
+Your job is to read each section of this page and give clear, plain-language editing suggestions — the kind a good editor would leave in the margin.
 
-PAGE OVERVIEW
+Keep it simple. No jargon. No technical scoring. Just tell the team what to fix and why it matters for readers and search.
+
+PAGE CONTEXT
 URL: ${url}
 Title: ${title}
 Introduction: ${introduction}
 
-Google NLP Classification:
-- Primary: ${nlp.primaryCategory ? `${nlp.primaryCategory.name} (${(nlp.primaryCategory.confidence*100).toFixed(1)}%)` : 'None'}
-- Secondary: ${nlp.secondaryCategory ? `${nlp.secondaryCategory.name} (${(nlp.secondaryCategory.confidence*100).toFixed(1)}%)` : 'None'}
-- Clarity Gap: ${(nlp.clarityGap*100).toFixed(1)}%${intentCtx}
+What Google NLP detected this page is about:
+- Primary topic: ${nlp.primaryCategory ? `${nlp.primaryCategory.name} (${(nlp.primaryCategory.confidence*100).toFixed(1)}% confidence)` : 'Not detected'}
+- Secondary topic: ${nlp.secondaryCategory ? `${nlp.secondaryCategory.name} (${(nlp.secondaryCategory.confidence*100).toFixed(1)}% confidence)` : 'Not detected'}
+- Topic focus: ${(nlp.clarityGap*100).toFixed(1)}% gap between primary and secondary (higher = more focused)${intentCtx ? '\n\nWhat the team wants this page to be about:' + intentCtx : ''}
 
-SECTIONS TO ANALYZE:
+SECTIONS TO REVIEW:
 ${sectionsText}
 
-TASKS
+FOR EACH SECTION, tell the team:
+1. Is the heading clear — does a reader instantly know what this section is for and who it's for?
+2. Does the content actually deliver what the heading promises?
+3. One specific edit that would make the biggest difference (be concrete — point to the exact thing to change)
+4. Flag anything that reads like an unsupported claim — phrases like "the best", "proven to", "always", "never" without any evidence behind them
 
-For each section, analyze:
-1. Does the heading clearly signal the section's purpose and audience?
-2. Does the content deliver on the heading's promise?
-3. Are there mixed signals (wrong audience, competing topics, vague framing)?
-4. What is the single most impactful edit for this section?
-5. Are there any ungrounded claims? (vague assertions, unsupported stats, superlatives without evidence, opinions presented as facts — flag these but do not fact-check)
+THEN give an overall page summary:
+- What topic does this page actually come across as (in plain language, not category names)?
+- Does that match what it should be about? If not, what's causing the mismatch?
+- The 2-3 most important fixes across the whole page
+- What improves if the team makes these edits?
 
-Also provide overall page-level analysis:
-A) Current Interpretation Summary (1-2 sentences)
-B) Intent Alignment: Aligned | Partially aligned | Mixed + reason
-C) Top 2-4 Mixed Signals across the whole page
-D) Expected Outcome if edits are applied (1-2 sentences)
+CategoryMatchStatus — only include if the team specified a target topic:
+- Target matches detected → "ON TOPIC"
+- Target detected but not the main focus → "WRONG EMPHASIS"  
+- Target not detected at all → "OFF TOPIC"
+- No target given → "No target set"
 
-GROUNDING SCORE (0-100):
-Score based on:
-- Title Clarity (25pts): specifies format +6, audience +6, scope +6, outcome +7
-- Structural Alignment (30pts): (aligned H2s / total H2s) × 30
-- Introduction Anchoring (20pts): explicit prerequisites +10, explicit audience +10
-- Content Verification (15pts): title topics appear as H2s +8, scope maintained +4, logical hierarchy +3
-- Audience Definition (10pts): lower bound defined +5, upper bound defined +5
-
-In groundingExplanation: quote exact title, list 3+ H2s, show the score math, quote intro statements.
-
-DIMENSION SCORES (Claude-assessed only — D5, D6, D7):
-D5 — Intro Audience Signal (10pts): explicit audience + prerequisites = 10, one explicit = 8, both implied = 4, neither = 0. Quote the intro text that supports this score.
-D6 — Scope Consistency (10pts): all sections on-topic = 10, 1 off-topic = 7, 2 off-topic = 4, 3+ = 0. List any off-topic sections.
-D7 — Content Delivery & Claim Grounding (25pts):
-  Part A: Section Delivery (10pts) — do sections deliver on their headings? all/most = 10, some vague = 6, most don't = 2
-  Part B: Claim Support (10pts) — are claims backed by evidence? most supported = 10, mixed = 6, most unsupported = 2
-  Part C: Ungrounded Language (5pts) — none = 5, 1-2 instances = 3, 3+ = 0. Quote exact ungrounded text.
-
-CategoryMatchStatus rules:
-- No target provided → "No intent specified"
-- Target primary matches detected primary → "PRIMARY MATCH"
-- Target primary differs but partially supported → "WRONG PRIORITY"
-- Target primary strongly conflicts → "PRIMARY MISMATCH"
-
-Return JSON ONLY (no markdown, no code fences):
+Return JSON ONLY (no markdown):
 
 {
-  "categoryMatchStatus": "PRIMARY MATCH|WRONG PRIORITY|PRIMARY MISMATCH|No intent specified",
-  "groundingScore": 0,
-  "groundingExplanation": "Quote title, list 3+ H2s, show score math, quote intro statements",
-  "dimensionScores": {
-    "introAudienceSignal": { "score": 0, "evidence": "exact intro quote", "reason": "" },
-    "scopeConsistency": { "score": 0, "offTopicSections": [], "reason": "" },
-    "contentDelivery": {
-      "sectionDeliveryScore": 0,
-      "claimSupportScore": 0,
-      "ungroundedLanguageScore": 0,
-      "totalScore": 0,
-      "ungroundedClaims": [{ "section": "", "quote": "", "issue": "" }],
-      "reason": ""
-    }
+  "categoryMatchStatus": "ON TOPIC|WRONG EMPHASIS|OFF TOPIC|No target set",
+  "currentInterpretationSummary": "What this page actually reads as — plain language, 1-2 sentences",
+  "intentAlignmentAssessment": {
+    "status": "Aligned|Partially aligned|Mixed",
+    "reason": "Plain explanation of why, 1-2 sentences"
   },
-  "currentInterpretationSummary": "1-2 sentences",
-  "intentAlignmentAssessment": { "status": "Aligned|Partially aligned|Mixed", "reason": "1-3 sentences" },
-  "topMixedSignals": ["signal 1", "signal 2"],
+  "topMixedSignals": [
+    "Specific issue on the page in plain language",
+    "Another specific issue"
+  ],
   "sectionAnalysis": [
     {
       "heading": "exact heading text",
       "level": "h1|h2|h3",
       "position": "Section N of M",
-      "expectedRole": "what this section should do given its position",
+      "expectedRole": "what this section should be doing based on where it sits on the page",
       "deliversOnPromise": true,
-      "mixedSignals": [],
-      "ungroundedClaims": [{ "quote": "", "issue": "" }],
-      "suggestedEdits": [{ "location": "where exactly", "change": "the minimal edit", "reason": "why this improves intent clarity" }]
+      "mixedSignals": ["any clarity issues — plain language, or empty array if clear"],
+      "ungroundedClaims": [
+        { "quote": "exact text that lacks support", "issue": "plain explanation of the problem" }
+      ],
+      "suggestedEdits": [
+        {
+          "location": "where exactly (e.g. the heading, the opening sentence, the third paragraph)",
+          "change": "what to do — specific and concrete",
+          "reason": "why this helps the reader or search understand the page better"
+        }
+      ]
     }
   ],
-  "expectedOutcome": "1-2 sentences"
+  "expectedOutcome": "What gets better if the team makes these changes — 1-2 plain sentences"
 }
 
 RULES:
-- sectionAnalysis must include every section provided — never skip any
-- suggestedEdits per section: 1-3 specific edits only (omit suggestedEdits array if section is already clear)
-- mixedSignals: only flag real issues, leave empty array if section is clear
-- Never invent sections not in the outline
-- ungroundedClaims: quote the exact text, explain why it lacks grounding — do not fact-check
-`;
+- Include every section — never skip one
+- 1-3 edits per section max — only the ones that actually matter
+- Empty arrays for mixedSignals and ungroundedClaims if there are no real issues
+- Never invent sections not in the page
+- Write like a smart editor, not a data scientist`;
 
     const r = await fetch('/api/claude', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
     if (!r.ok) { const e = await r.json(); throw new Error(e?.error || 'Claude failed'); }
@@ -1219,7 +1193,7 @@ RULES:
 
       <div className="hero">
         <div className="hero-tag"><div className="hero-dot" />Google NLP + Claude</div>
-        <h1>Stop publishing content<br /><em>AI ignores.</em></h1>
+        <h1>Stop publishing content<br /><em>AI skips.</em></h1>
         <p>Most pages aren't ignored because they're bad — they're ignored because they're ambiguous. Fix that with section-level edits backed by real classification data.</p>
       </div>
 
@@ -1355,8 +1329,18 @@ RULES:
                 <div style={{ flex: 1 }}><div className="rct">Category Detection</div><div className="rcs">Google NLP classification</div></div>
                 {results.claude?.categoryMatchStatus && (() => {
                   const s = results.claude.categoryMatchStatus;
-                  const cls = s.includes('MATCH') && !s.includes('MIS') ? 'bg' : s.includes('WRONG') ? 'ba' : s.includes('MIS') ? 'br' : 'bgy';
-                  return <span className={`bdg ${cls}`}>{s}</span>;
+                  const statusMap = {
+                    'ON TOPIC': { cls: 'bg', label: 'On Topic' },
+                    'WRONG EMPHASIS': { cls: 'ba', label: 'Wrong Emphasis' },
+                    'OFF TOPIC': { cls: 'br', label: 'Off Topic' },
+                    'No target set': { cls: 'bgy', label: 'No Target Set' },
+                    'PRIMARY MATCH': { cls: 'bg', label: 'On Topic' },
+                    'WRONG PRIORITY': { cls: 'ba', label: 'Wrong Emphasis' },
+                    'PRIMARY MISMATCH': { cls: 'br', label: 'Off Topic' },
+                    'No intent specified': { cls: 'bgy', label: 'No Target Set' },
+                  };
+                  const { cls = 'bgy', label = s } = statusMap[s] || {};
+                  return <span className={`bdg ${cls}`}>{label}</span>;
                 })()}
               </div>
               <div className="rcb">
@@ -1372,9 +1356,9 @@ RULES:
                     <div className="sts" style={{ color: 'var(--muted)', fontFamily: 'var(--mono)', fontSize: '12px' }}>{results.nlp.secondaryCategory ? `${(results.nlp.secondaryCategory.confidence * 100).toFixed(1)}%` : ''}</div>
                   </div>
                   <div className="st">
-                    <div className="stl">Clarity Gap</div>
+                    <div className="stl">Topic Focus</div>
                     <div className="stv" style={{ fontFamily: 'var(--mono)' }}>{(results.nlp.clarityGap * 100).toFixed(1)}%</div>
-                    <div className="sts" style={{ color: results.nlp.alignmentStatus === 'Aligned' ? 'var(--olive)' : results.nlp.alignmentStatus === 'Mixed (Acceptable)' ? 'var(--amber)' : 'var(--red)' }}>{results.nlp.alignmentStatus}</div>
+                    <div className="sts" style={{ color: results.nlp.alignmentStatus === 'Aligned' ? 'var(--olive)' : results.nlp.alignmentStatus === 'Mixed (Acceptable)' ? 'var(--amber)' : 'var(--red)' }}>{results.nlp.alignmentStatus === 'Aligned' ? 'Focused' : results.nlp.alignmentStatus === 'Mixed (Acceptable)' ? 'Mixed' : 'Scattered'}</div>
                   </div>
                 </div>
               </div>
@@ -1388,16 +1372,16 @@ RULES:
                 { label: 'Clarity Gap', src: 'NLP API', api: true, score: a.clarityGap.score, max: 10, detail: `Gap between primary and secondary: ${a.clarityGap.gap}%` },
                 { label: 'Title-to-Entity Match', src: 'NLP API', api: true, score: a.titleEntityMatch.score, max: 15, detail: `${a.titleEntityMatch.matches} of top 5 entities in title${a.titleEntityMatch.topEntities.length ? ': ' + a.titleEntityMatch.topEntities.join(', ') : ''}` },
                 { label: 'Heading-to-Entity Match', src: 'NLP API', api: true, score: a.headingEntityMatch.score, max: 15, detail: `${a.headingEntityMatch.matched} of ${a.headingEntityMatch.total} H2s contain a salient entity` },
-                { label: 'Intro Audience Signal', src: 'Claude', api: false, score: d?.introAudienceSignal?.score || 0, max: 10, detail: d?.introAudienceSignal?.evidence || d?.introAudienceSignal?.reason || '—' },
-                { label: 'Scope Consistency', src: 'Claude', api: false, score: d?.scopeConsistency?.score || 0, max: 10, detail: d?.scopeConsistency?.reason || '—' },
-                { label: 'Content Delivery & Claim Grounding', src: 'Claude', api: false, score: d?.contentDelivery?.totalScore || 0, max: 25, detail: d?.contentDelivery?.reason || '—',
-                  breakdown: d?.contentDelivery ? [{ label: 'Section delivery', score: d.contentDelivery.sectionDeliveryScore, max: 10 }, { label: 'Claim support', score: d.contentDelivery.claimSupportScore, max: 10 }, { label: 'Ungrounded language', score: d.contentDelivery.ungroundedLanguageScore, max: 5 }] : null },
+                { label: 'Intro Audience Signal', src: 'Claude', api: false, score: d?.introAudienceSignal?.score || 0, max: 10, detail: d?.introAudienceSignal?.evidence || d?.introAudienceSignal?.reason || 'Does the intro clearly state who this page is for?' },
+                { label: 'Scope Consistency', src: 'Claude', api: false, score: d?.scopeConsistency?.score || 0, max: 10, detail: d?.scopeConsistency?.reason || 'Do all sections stay on topic throughout?' },
+                { label: 'Content Delivery', src: 'Claude', api: false, score: d?.contentDelivery?.totalScore || 0, max: 25, detail: d?.contentDelivery?.reason || 'Do sections deliver on what their headings promise?',
+                  breakdown: d?.contentDelivery ? [{ label: 'Sections match headings', score: d.contentDelivery.sectionDeliveryScore, max: 10 }, { label: 'Claims are supported', score: d.contentDelivery.claimSupportScore, max: 10 }, { label: 'No unsupported language', score: d.contentDelivery.ungroundedLanguageScore, max: 5 }] : null },
               ];
               return (
                 <div className="rc">
                   <div className="rch">
                     <div className="rci" style={{ background: 'var(--olive-lt)' }}><Zap size={15} color="var(--olive)" /></div>
-                    <div style={{ flex: 1 }}><div className="rct">Content Clarity Score</div><div className="rcs">65 of 100 points grounded in NLP API data</div></div>
+                    <div style={{ flex: 1 }}><div className="rct">Content Clarity Score</div><div className="rcs">How well this content signals its topic to search and AI</div></div>
                     <div style={{ textAlign: 'right' }}>
                       <span style={{ fontFamily: 'var(--serif)', fontSize: '28px', fontWeight: 700, letterSpacing: '-0.5px', color: sfill(total / 100) }}>{total}</span>
                       <span style={{ fontFamily: 'var(--mono)', fontSize: '14px', color: 'var(--muted)' }}>/100</span>
@@ -1537,7 +1521,7 @@ RULES:
               <div className="rc">
                 <div className="rch">
                   <div className="rci" style={{ background: 'var(--olive-lt)' }}><Layers size={15} color="var(--olive)" /></div>
-                  <div><div className="rct">Section-by-Section Analysis</div><div className="rcs">Expand each section for targeted edits</div></div>
+                  <div><div className="rct">Section-by-Section Analysis</div><div className="rcs">Editor's notes — section by section</div></div>
                 </div>
                 <div className="rcb">
                   {results.claude.sectionAnalysis.map((s, i) => <SecAcc key={i} section={s} />)}
@@ -1550,11 +1534,11 @@ RULES:
               <div className="rc">
                 <div className="rch">
                   <div className="rci" style={{ background: 'var(--olive-lt)' }}><ArrowRight size={15} color="var(--olive)" /></div>
-                  <div><div className="rct">Intent & Clarity</div><div className="rcs">Page-level interpretation and recommendations</div></div>
+                  <div><div className="rct">Page Summary</div><div className="rcs">Page-level interpretation and recommendations</div></div>
                 </div>
                 <div className="rcb">
                   {results.claude.currentInterpretationSummary && (
-                    <div className="ir"><div className="irl">Current Interpretation</div><div className="irv">{results.claude.currentInterpretationSummary}</div></div>
+                    <div className="ir"><div className="irl">What this page reads as</div><div className="irv">{results.claude.currentInterpretationSummary}</div></div>
                   )}
                   {results.claude.intentAlignmentAssessment && (
                     <div className="ir">
@@ -1576,7 +1560,7 @@ RULES:
                     </div>
                   )}
                   {results.claude.expectedOutcome && (
-                    <div className="ir"><div className="irl">Expected Outcome</div><div className="irv">{results.claude.expectedOutcome}</div></div>
+                    <div className="ir"><div className="irl">What improves with these edits</div><div className="irv">{results.claude.expectedOutcome}</div></div>
                   )}
                 </div>
               </div>
