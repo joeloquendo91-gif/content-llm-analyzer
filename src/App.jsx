@@ -1114,7 +1114,7 @@ RULES:
 - Never invent sections not in the page
 - titleEdit: only flag if the title text itself is a problem — not missing content beneath it
 - Write like a smart editor, not a data scientist
-- CRITICAL: Return valid JSON only. All string values must use single quotes for any quoted text inside them — NEVER nest double quotes inside a double-quoted JSON string value. Never leave trailing commas. When quoting a heading or example text within a string value, use single quotes.
+- CRITICAL: Return valid JSON only. Every string value must be on a single line — no literal newlines, line breaks, or carriage returns inside any string value. Use a space or semicolon instead of a line break. Never nest double quotes inside string values — use single quotes instead. No trailing commas.
 - For introGuidance: set needed=false and leave currentIssue/suggestion null if the intro already aligns well with the page topic`;
 
     const r = await fetch('/api/claude', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
@@ -1132,16 +1132,20 @@ RULES:
         .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '')
         .replace(/,\s*([\]\}])/g, '$1');
       try { return JSON.parse(clean1); } catch (e2) {
-        // Attempt 3: replace literal newlines/tabs inside JSON strings
+        // Attempt 3: walk char by char, escape bare newlines only while inside a string
         try {
-          // This regex finds JSON string values and replaces bare newlines/tabs within them
-          const clean2 = clean1.replace(/"((?:[^"\\]|\\.)*)"/g, (match) => {
-            return match
-              .replace(/\n/g, '\\n')
-              .replace(/\r/g, '\\r')
-              .replace(/\t/g, '\\t');
-          });
-          return JSON.parse(clean2);
+          let out = '', inStr = false, esc = false;
+          for (let i = 0; i < clean1.length; i++) {
+            const ch = clean1[i];
+            if (esc) { out += ch; esc = false; continue; }
+            if (ch === '\\') { out += ch; esc = true; continue; }
+            if (ch === '"') { inStr = !inStr; out += ch; continue; }
+            if (inStr && ch === '\n') { out += '\\n'; continue; }
+            if (inStr && ch === '\r') { out += '\\r'; continue; }
+            if (inStr && ch === '\t') { out += '\\t'; continue; }
+            out += ch;
+          }
+          return JSON.parse(out);
         } catch (e3) {
           // Attempt 4: partial extraction of scalar fields
           const safe = (key, fallback) => {
