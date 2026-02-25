@@ -330,6 +330,7 @@ const fetchWithTimeout = (resource, options = {}, timeoutMs = 20000) =>
   }
 
   // data: { title, introduction, headings[], text }
+  console.log('EXTRACT RESPONSE:', { title: data.title, headingCount: data.headings?.length, hasText: !!data.text });
   return data;
 };
 
